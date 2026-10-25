@@ -1,0 +1,21 @@
+name: chalk
+services:
+  app:
+    image: chalk-app:local
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "8080:8000"
+    volumes:
+      - chalk-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+      start_interval: 1s
+    restart: unless-stopped
+volumes:
+  chalk-data: {}

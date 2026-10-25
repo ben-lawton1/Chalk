@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vitest/
+*.db
+*.db-wal
+*.db-shm
+e2e/artifacts/
+.env

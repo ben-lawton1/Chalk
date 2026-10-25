@@ -1,0 +1,30 @@
+name: chalk-dev
+services:
+  api:
+    image: chalk-api-dev:local
+    build:
+      context: .
+      target: api-dev
+    environment:
+      CHALK_DB_PATH: /data/chalk-dev.db
+    volumes:
+      - ./backend/app:/app/app
+      - chalk-dev-data:/data
+    ports:
+      - "8000:8000"
+  web:
+    image: chalk-web-dev:local
+    build:
+      context: .
+      target: web-dev
+    environment:
+      CHALK_API_PROXY: http://api:8000
+    volumes:
+      - ./frontend:/web
+      - /web/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+volumes:
+  chalk-dev-data: {}

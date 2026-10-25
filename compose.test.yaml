@@ -1,0 +1,53 @@
+name: chalk-test
+x-health: &health
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+  interval: 5s
+  timeout: 3s
+  retries: 30
+  start_period: 5s
+  start_interval: 1s
+services:
+  app-test:                         # isolated instance, throwaway DB in /tmp; NEVER touches chalk-data
+    image: chalk-app-test:local
+    build:
+      context: .
+      target: runtime
+    environment:
+      CHALK_DB_PATH: /tmp/chalk-e2e.db
+    healthcheck: *health
+  e2e:
+    image: chalk-e2e:local
+    build:
+      context: ./e2e
+    depends_on:
+      app-test:
+        condition: service_healthy
+    environment:
+      BASE_URL: http://app-test:8000
+      CI: "1"
+    ipc: host
+    init: true
+    volumes:
+      - ./e2e/tests:/e2e/tests:ro
+      - ./e2e/artifacts:/e2e/artifacts
+  web-unit:
+    image: chalk-web-dev:local
+    profiles: ["unit"]
+    build:
+      context: .
+      target: web-dev
+    volumes:
+      - ./frontend/src:/web/src:ro
+    command: ["npm", "run", "check"]
+  api-unit:
+    image: chalk-api-dev:local
+    profiles: ["unit"]
+    build:
+      context: .
+      target: api-dev
+    environment:
+      CHALK_DB_PATH: /tmp/chalk-unit.db
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/tests:/app/tests:ro
+    command: ["pytest"]
