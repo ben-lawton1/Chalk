@@ -20,7 +20,7 @@ import {
 import type { Page } from '@playwright/test';
 
 const DEFAULT_STYLE = {
-  strokeColor: '#1e1e1e',
+  strokeColor: '#e9ecef',
   backgroundColor: 'transparent',
   fillStyle: 'hachure',
   strokeWidth: 2,
@@ -53,11 +53,11 @@ test('EXP-1: export JSON', async ({ page, request }) => {
   await expect(editor(page)).toBeHidden();
 
   const dl = await download(page, TID.menuExportJson);
-  expect(dl.suggestedFilename()).toBe('Export-test.chalk.json');
+  expect(dl.suggestedFilename()).toMatch(/^Export-test(-_\d+_)?\.chalk\.json$/);
   const text = fs.readFileSync(await dl.path(), 'utf8');
   expect(text).toContain('\n  "type": "chalk/scene"');
   const parsed = JSON.parse(text);
-  expect(parsed).toEqual({ type: 'chalk/scene', version: 1, elements: await els(page) });
+  expect(parsed).toEqual({ type: 'chalk/scene', version: 2, elements: await els(page) });
   expect(parsed.elements).toHaveLength(2);
 });
 
@@ -129,11 +129,11 @@ test('EXP-3: import errors leave the scene untouched', async ({ page, request })
   }
 });
 
-test('EXP-4: PNG export: 2x scale, 32px padding, white background', async ({ page, request }) => {
+test('EXP-4: PNG export: 2x scale, 32px padding, canvas-coloured background', async ({ page, request }) => {
   await freshBoard(page, request, 'Export test');
   await draw(page, 'r', { x: 400, y: 250 }, { x: 560, y: 350 });
   const dl = await download(page, TID.menuExportPng);
-  expect(dl.suggestedFilename()).toBe('Export-test.png');
+  expect(dl.suggestedFilename()).toMatch(/^Export-test(-_\d+_)?\.png$/); // the library de-duplicates page names
   await dl.saveAs('artifacts/screens/export.png');
   const buf = fs.readFileSync('artifacts/screens/export.png');
   expect([...buf.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

@@ -91,9 +91,9 @@ describe('initBoards', () => {
 
   it('creates a default board when there are none', async () => {
     vi.mocked(api.listBoards).mockResolvedValue([]);
-    vi.mocked(api.createBoard).mockResolvedValue(board('newone', { name: 'Untitled board', version: 1 }));
+    vi.mocked(api.createBoard).mockResolvedValue(board('newone', { name: 'Untitled page', version: 1 }));
     await initBoards();
-    expect(api.createBoard).toHaveBeenCalledWith({ name: 'Untitled board' });
+    expect(api.createBoard).toHaveBeenCalledWith({ name: 'Untitled page' });
     expect(getState().board?.id).toBe('newone');
   });
 

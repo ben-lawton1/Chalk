@@ -117,7 +117,7 @@ export const BOARD_LOAD_RETRY_MS = 1000;
 export const VIEWPORT_SAVE_DEBOUNCE_MS = 400;
 export const VIEWPORT_STORAGE_PREFIX = 'chalk:viewport:';
 export const BACKUP_STORAGE_PREFIX = 'chalk:backup:';
-export const DEFAULT_BOARD_NAME = 'Untitled board';
+export const DEFAULT_BOARD_NAME = 'Untitled page';
 export const MAX_BOARD_NAME_LENGTH = 120;
 
 // ---------------------------------------------------------------------------

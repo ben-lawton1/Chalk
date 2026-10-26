@@ -164,7 +164,7 @@ test('VPT-6: zoom to fit, and zoom to selection', async ({ page, request }) => {
 
 test('VPT-7: scroll back to content', async ({ page, request }) => {
   await freshBoard(page, request);
-  await draw(page, 'r', { x: 500, y: 300 }, { x: 660, y: 400 });
+  await draw(page, 'r', { x: 900, y: 600 }, { x: 1060, y: 700 });
   const r = await last(page);
   await page.mouse.wheel(0, 3000);
   await expect(page.getByTestId(TID.scrollToContent)).toBeVisible();
@@ -173,4 +173,24 @@ test('VPT-7: scroll back to content', async ({ page, request }) => {
   const sb = (await screenBounds(page, r.id))!;
   nearPt({ x: sb.x + sb.width / 2, y: sb.y + sb.height / 2 }, { x: 640, y: 400 }, 1);
   await expect(page.getByTestId(TID.scrollToContent)).toBeHidden();
+});
+
+test('VPT-8: the page stops at its top-left corner and Home returns to it', async ({ page, request }) => {
+  await freshBoard(page, request);
+  await page.mouse.move(640, 400);
+  await page.mouse.wheel(-500, -500);
+  await page.waitForTimeout(100); // nothing to poll for: the viewport must stay put
+  expect(await vp(page)).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+
+  await page.mouse.wheel(300, 400);
+  await expect.poll(async () => (await vp(page)).scrollY).toBe(-400);
+  await page.getByTestId(TID.zoomIn).click();
+  await page.getByTestId(TID.zoomHome).click();
+  expect(await vp(page)).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+
+  await page.mouse.move(640, 400);
+  await page.mouse.wheel(0, 600);
+  await expect.poll(async () => (await vp(page)).scrollY).toBe(-600);
+  await page.keyboard.press('Home');
+  expect(await vp(page)).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
 });

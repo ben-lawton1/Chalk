@@ -92,12 +92,12 @@ test('STY-2: every control applies to the selection and becomes sticky', async (
   const pressed = (id: string) => expect(tid(page, id), id).toHaveAttribute('aria-pressed', 'true');
 
   await tid(page, tidStroke(1)).click();
-  expect((await style()).strokeColor).toBe('#e03131');
+  expect((await style()).strokeColor).toBe('#ff6b6b');
   await pressed(tidStroke(1));
   await expect(tid(page, tidStroke(0))).toHaveAttribute('aria-pressed', 'false');
 
   await tid(page, tidBg(3)).click();
-  expect((await style()).backgroundColor).toBe('#a5d8ff');
+  expect((await style()).backgroundColor).toBe('#1d3b57');
   await pressed(tidBg(3));
 
   await tid(page, tidFill('cross-hatch')).click();
@@ -137,7 +137,7 @@ test('STY-2: every control applies to the selection and becomes sticky', async (
   const ell = await last(page);
   expect(ell.style).toMatchObject({
     strokeColor: '#123456',
-    backgroundColor: '#a5d8ff',
+    backgroundColor: '#1d3b57',
     fillStyle: 'solid',
     strokeWidth: 4,
     strokeStyle: 'dashed',
@@ -153,7 +153,7 @@ test('STY-2: every control applies to the selection and becomes sticky', async (
   await tid(page, tidStroke(2)).click();
   expect(await els(page)).toEqual(before);
   await drag(page, { x: 400, y: 450 }, { x: 560, y: 550 });
-  expect((await last(page)).style.strokeColor).toBe('#2f9e44');
+  expect((await last(page)).style.strokeColor).toBe('#69db7c');
 });
 
 test('STY-3: text and arrow styles', async ({ page, request }) => {
@@ -202,15 +202,15 @@ test('STY-4: undo/redo buttons and keys, redo clearing, slider merging, no undo 
   await tid(page, TID.undo).click();
   let s = (await byId(page, R)).style;
   expect(s.backgroundColor).toBe('transparent');
-  expect(s.strokeColor).toBe('#e03131');
+  expect(s.strokeColor).toBe('#ff6b6b');
   await tid(page, TID.undo).click();
-  expect((await byId(page, R)).style.strokeColor).toBe('#1e1e1e');
+  expect((await byId(page, R)).style.strokeColor).toBe('#e9ecef');
   await expect(tid(page, TID.redo)).toBeEnabled();
 
   await tid(page, TID.redo).click();
-  expect((await byId(page, R)).style.strokeColor).toBe('#e03131');
+  expect((await byId(page, R)).style.strokeColor).toBe('#ff6b6b');
   await page.keyboard.press('Control+y');
-  expect((await byId(page, R)).style.backgroundColor).toBe('#ffc9c9');
+  expect((await byId(page, R)).style.backgroundColor).toBe('#5c2a2a');
   await expect(tid(page, TID.redo)).toBeDisabled();
 
   await page.keyboard.press('Control+z');

@@ -1,7 +1,7 @@
 import { test, expect, TID, tidTool, els, app, selected, last, freshBoard, draw, drag, shot, nearRect } from './helpers';
 
 const DEFAULT_STYLE = {
-  strokeColor: '#1e1e1e',
+  strokeColor: '#e9ecef',
   backgroundColor: 'transparent',
   fillStyle: 'hachure',
   strokeWidth: 2,

@@ -146,7 +146,7 @@ test('PER-5: multiple boards: new, list, open, delete', async ({ page, request }
   await expect.poll(async () => (await app(page)).boardId).toBe(id2);
   expect(await els(page)).toEqual([]);
   await expect(page.getByTestId(TID.welcomeHint)).toBeVisible();
-  await expect(page.getByTestId(TID.boardName)).toHaveValue('Untitled board');
+  await expect(page.getByTestId(TID.boardName)).toHaveValue(/^Untitled page( \(\d+\))?$/);
   expect((await getBoard(request, id1)).scene.elements).toHaveLength(1);
 
   await menu(page, TID.menuOpenBoards);
