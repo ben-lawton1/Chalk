@@ -480,6 +480,10 @@ export interface HealthResponse {
   status: 'ok';
 }
 
+export interface AppConfig {
+  terminalUrl: string;
+}
+
 export interface ShortcutInfo {
   /** Display string, e.g. 'Ctrl + Z'. */
   keys: string;

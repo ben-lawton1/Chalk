@@ -44,6 +44,7 @@
   --btn: 36px;
   --tool-btn: 44px;
   --sidebar-w: 0px; /* set on <html> by ui/Sidebar.tsx: 264px open, 0px closed */
+  --terminal-h: 0px; /* set on <html> by ui/terminal/terminalStore.ts: the open dock panel height, 0px when hidden */
   --sb-bg: #1a1d22;
   --sb-hover: #242830;
   --sb-current: #203632;
@@ -347,7 +348,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   transition: left 0.15s ease;
   width: 220px;
   /* top offset 78px, minus the zoom controls (44px) + edge gap (12px) + 8px breathing room */
-  max-height: calc(100vh - 142px);
+  max-height: calc(100vh - 142px - var(--terminal-h));
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--space-1) var(--space-3) var(--space-3);
@@ -432,7 +433,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 .zoom-controls {
   left: calc(var(--sidebar-w) + var(--edge));
   transition: left 0.15s ease;
-  bottom: var(--edge);
+  bottom: calc(var(--edge) + var(--terminal-h));
   display: flex;
   align-items: center;
   gap: 2px;
@@ -449,7 +450,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   z-index: var(--z-island);
   left: calc(var(--sidebar-w) + 336px);
   transition: left 0.15s ease;
-  bottom: var(--edge);
+  bottom: calc(var(--edge) + var(--terminal-h));
   height: 44px;
   display: inline-flex;
   align-items: center;
@@ -471,7 +472,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   z-index: var(--z-island);
   left: calc((100vw + var(--sidebar-w)) / 2);
   transition: left 0.15s ease;
-  bottom: var(--edge);
+  bottom: calc(var(--edge) + var(--terminal-h));
   transform: translateX(-50%);
   max-width: calc(100vw - var(--sidebar-w) - 600px);
   padding: 6px var(--space-3);
@@ -491,7 +492,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   z-index: var(--z-island);
   left: calc((100vw + var(--sidebar-w)) / 2);
   transition: left 0.15s ease;
-  top: 50%;
+  top: calc((100vh - var(--terminal-h)) / 2);
   transform: translate(-50%, -50%);
   width: 560px;
   max-width: calc(100vw - var(--sidebar-w) - 40px);
@@ -509,7 +510,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   position: fixed;
   z-index: var(--z-overlay);
   left: calc((100vw + var(--sidebar-w)) / 2);
-  bottom: 48px;
+  bottom: calc(48px + var(--terminal-h));
   transform: translateX(-50%);
   max-width: min(520px, calc(100vw - 40px));
   padding: 9px var(--space-4);
@@ -527,7 +528,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   position: fixed;
   z-index: var(--z-island);
   right: var(--edge);
-  bottom: var(--edge);
+  bottom: calc(var(--edge) + var(--terminal-h));
   width: 36px;
   height: 36px;
   padding: 0;
@@ -622,7 +623,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   position: fixed;
   top: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--terminal-h);
   left: var(--sidebar-w);
   z-index: var(--z-canvas);
   overflow: clip; /* notes below the fold must never scroll the stage */
@@ -822,7 +823,7 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 .sb-path { margin-top: 2px; padding: 4px var(--space-2) 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--faint); }
 
 @media (prefers-reduced-motion: reduce) {
-  .sidebar, .topbar, .toolbar, .pen-tray, .style-panel, .zoom-controls, .scroll-to-content, .hint-bar, .welcome-hint, .conflict-banner { transition: none; }
+  .sidebar, .topbar, .toolbar, .terminal-panel, .pen-tray, .style-panel, .zoom-controls, .scroll-to-content, .hint-bar, .welcome-hint, .conflict-banner { transition: none; }
 }
 
 /* ---------- page notes (v4): the Tiptap column above the canvases ---------- */
@@ -1152,3 +1153,131 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 .notes-editor .page-link.ProseMirror-selectednode { outline: 2px solid var(--accent); }
 /* The pending /query or @query text. */
 .notes-editor .suggestion { color: var(--muted); }
+/* ---------- terminal (button at the top right, dock panel over the stage width) ---------- */
+.terminal-button {
+  top: var(--edge);
+  right: var(--edge);
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+}
+.terminal-button:hover { background: var(--hover-bg); }
+.terminal-button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-strong); }
+.terminal-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.terminal-panel {
+  position: fixed;
+  z-index: var(--z-island);
+  left: var(--sidebar-w);
+  transition: left 0.15s ease;
+  right: 0;
+  bottom: 0;
+  height: var(--terminal-h);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: #16181d;
+  border-top: 1px solid var(--border);
+}
+.terminal-panel[hidden] { display: none; }
+.terminal-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  height: 8px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.terminal-resize:hover, .terminal-resize:active { background: var(--accent-soft); }
+.terminal-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 0 var(--space-2);
+  background: var(--island-bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.terminal-tablist { display: flex; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  height: 26px;
+  padding: 0 4px 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.terminal-tab:hover { background: var(--hover-bg); }
+.terminal-tab[data-active="true"] { background: var(--active-bg); color: var(--text); }
+.terminal-tab[data-status="exited"], .terminal-tab[data-status="closed"], .terminal-tab[data-status="error"] { font-style: italic; }
+.terminal-tab-name { overflow: hidden; text-overflow: ellipsis; }
+.terminal-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+.terminal-tab-close:hover { background: var(--danger-soft); color: var(--danger); }
+.terminal-tool { width: 28px; height: 26px; }
+.terminal-spacer { flex: 1; }
+.terminal-menu-wrap { position: relative; display: flex; }
+.terminal-menu { position: absolute; left: 0; bottom: auto; top: calc(100% + 6px); min-width: 160px; padding: var(--space-1); z-index: var(--z-overlay); }
+.terminal-menu-empty { padding: var(--space-2); color: var(--muted); font-size: var(--fs-sm); }
+.terminal-body { position: relative; flex: 1; min-height: 0; }
+.terminal-hosts { position: absolute; inset: 0; padding: 4px 0 0 var(--space-2); box-sizing: border-box; }
+.terminal-host { width: 100%; height: 100%; }
+.terminal-host[data-active="false"] { display: none; }
+.terminal-ended {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--tooltip-bg);
+  box-shadow: var(--island-shadow);
+  font-size: var(--fs-md);
+  color: var(--muted);
+}
+.terminal-offline {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: #16181d;
+  text-align: center;
+  overflow: auto;
+}
+.terminal-offline p { margin: 0; color: var(--muted); }
+.terminal-offline code { padding: 4px 10px; border-radius: var(--radius-sm); background: var(--island-bg); font-family: var(--font-mono); user-select: text; -webkit-user-select: text; }
+.terminal-offline a { color: var(--accent-strong); }
+.terminal-offline .text-btn { margin-top: var(--space-1); }
+.terminal-host .xterm { height: 100%; }
+.terminal-host .xterm-viewport { background-color: transparent !important; }

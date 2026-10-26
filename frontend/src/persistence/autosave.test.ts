@@ -18,6 +18,7 @@ vi.mock('./api', async (orig) => ({
   ...(await orig<typeof import('./api')>()),
   api: {
     health: vi.fn(),
+    getConfig: vi.fn(),
     listBoards: vi.fn(),
     getBoard: vi.fn(),
     createBoard: vi.fn(),

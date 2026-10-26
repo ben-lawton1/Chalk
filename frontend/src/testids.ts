@@ -103,6 +103,25 @@ export const TID = {
   penLasso: 'pen-lasso',
   penOptions: 'pen-options',
   penSwapButtons: 'pen-swap-buttons',
+
+  // Terminal (v4)
+  terminalButton: 'terminal-button',
+  terminalPanel: 'terminal-panel',
+  terminalResize: 'terminal-resize',
+  terminalTabs: 'terminal-tabs',
+  terminalTab: 'terminal-tab',
+  terminalTabClose: 'terminal-tab-close',
+  terminalNew: 'terminal-new',
+  terminalProfiles: 'terminal-profiles',
+  terminalMenu: 'terminal-menu',
+  terminalProfile: 'terminal-profile',
+  terminalMinimise: 'terminal-minimise',
+  terminalKillAll: 'terminal-kill-all',
+  terminalOffline: 'terminal-offline',
+  terminalRetry: 'terminal-retry',
+  terminalEnded: 'terminal-ended',
+  terminalRestart: 'terminal-restart',
+  terminalHost: 'terminal-host',
 } as const;
 
 /** Toolbar button for a ToolId, e.g. 'tool-rectangle'. Active state: aria-pressed="true". */
