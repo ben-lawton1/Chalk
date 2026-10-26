@@ -17,6 +17,7 @@ export function initialState(): AppState {
     board: null, saveStatus: 'loading', canUndo: false, canRedo: false, dialog: 'none', toast: null,
     library: null, sidebarOpen: true,
     pens: DEFAULT_PENS.map((p) => ({ ...p })), activePen: 0, penButtonsSwapped: false, penTrayOpen: false,
+    notes: null, notesActive: false, notesBounds: null,
   };
 }
 

@@ -1,9 +1,9 @@
 // PNG and JSON export/import, drawn by the same drawScene as the live canvas (WP2).
-import type { ChalkElement, Rect } from '../types';
+import type { ChalkElement, NotesDoc, Rect } from '../types';
 import { CANVAS_BACKGROUND, EXPORT_PADDING, EXPORT_SCALE, MAX_CANVAS_SIDE } from '../constants';
 import { expandRect } from '../core/math';
 import { getCommonBounds } from '../core/geometry';
-import { SceneParseError, parseSceneFile, toSceneFile } from '../core/serialize';
+import { SceneParseError, parseSceneFile, parseSceneNotes, toSceneFile } from '../core/serialize';
 import { drawScene } from './drawScene';
 
 interface FrameOptions { scale?: number; padding?: number }
@@ -57,13 +57,13 @@ export async function exportPng(elements: readonly ChalkElement[], name: string)
 }
 
 /** Downloads `<name>.chalk.json`, a pretty-printed SceneFile. */
-export function exportSceneJson(elements: readonly ChalkElement[], name: string): void {
-  const json = JSON.stringify(toSceneFile(elements), null, 2);
+export function exportSceneJson(elements: readonly ChalkElement[], name: string, notes?: NotesDoc | null): void {
+  const json = JSON.stringify(toSceneFile(elements, notes), null, 2);
   downloadBlob(new Blob([json], { type: 'application/json' }), `${safeFileName(name)}.chalk.json`);
 }
 
 /** Reads and validates a scene file. Throws SceneParseError for anything unusable. */
-export async function importSceneJson(file: File): Promise<ChalkElement[]> {
+export async function importSceneJson(file: File): Promise<{ elements: ChalkElement[]; notes: NotesDoc | null }> {
   const text = await file.text();
   let json: unknown;
   try {
@@ -71,7 +71,7 @@ export async function importSceneJson(file: File): Promise<ChalkElement[]> {
   } catch {
     throw new SceneParseError('File is not valid JSON');
   }
-  return parseSceneFile(json);
+  return { elements: parseSceneFile(json), notes: parseSceneNotes(json) };
 }
 
 /** Saves a blob through a temporary <a download>; the object URL is revoked after 1s. */

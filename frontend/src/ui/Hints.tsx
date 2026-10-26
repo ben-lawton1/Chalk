@@ -1,10 +1,11 @@
 // Onboarding hints: welcome message on empty boards, contextual hint bar, and the scroll-to-content button. Owner: WP4.
 import { rectsIntersect } from '../core/math';
 import { getBounds } from '../core/geometry';
+import { isNotesEmpty } from '../core/notes';
 import { visibleWorldRect } from '../core/viewport';
 import { zoomToFit } from '../state/actions';
 import { TID } from '../testids';
-import type { AppState, ChalkElement, Size, Viewport } from '../types';
+import type { AppState, ChalkElement, NotesDoc, Rect, Size, Viewport } from '../types';
 import { useAppState } from './hooks';
 import { Icon } from './icons';
 
@@ -33,19 +34,20 @@ function hintFor(s: AppState): string {
   }
 }
 
-let memo: { els: readonly ChalkElement[]; vp: Viewport; size: Size; result: boolean } | null = null;
-/** True when there is content but none of it intersects the visible world rect. Memoized: it runs on every store change. */
+let memo: { els: readonly ChalkElement[]; notes: NotesDoc | null; nb: Rect | null; vp: Viewport; size: Size; result: boolean } | null = null;
+/** True when there is content (elements, or a non-empty notes column) but none of it intersects the visible world rect. Memoized: it runs on every store change. */
 function contentIsOffscreen(s: AppState): boolean {
-  if (s.elements.length === 0 || s.viewportSize.width <= 0 || s.viewportSize.height <= 0) return false;
-  if (memo && memo.els === s.elements && memo.vp === s.viewport && memo.size === s.viewportSize) return memo.result;
+  const hasNotes = s.notesBounds !== null && !isNotesEmpty(s.notes);
+  if ((s.elements.length === 0 && !hasNotes) || s.viewportSize.width <= 0 || s.viewportSize.height <= 0) return false;
+  if (memo && memo.els === s.elements && memo.notes === s.notes && memo.nb === s.notesBounds && memo.vp === s.viewport && memo.size === s.viewportSize) return memo.result;
   let result = false;
   try {
     const visible = visibleWorldRect(s.viewport, s.viewportSize);
-    result = !s.elements.some((el) => rectsIntersect(getBounds(el), visible));
+    result = !s.elements.some((el) => rectsIntersect(getBounds(el), visible)) && !(hasNotes && rectsIntersect(s.notesBounds!, visible));
   } catch {
     result = false;
   }
-  memo = { els: s.elements, vp: s.viewport, size: s.viewportSize, result };
+  memo = { els: s.elements, notes: s.notes, nb: s.notesBounds, vp: s.viewport, size: s.viewportSize, result };
   return result;
 }
 

@@ -321,6 +321,12 @@ export interface AppState {
   /** Swaps which pen button erases and which lassos (for styluses that report them the other way round). */
   penButtonsSwapped: boolean;
   penTrayOpen: boolean;
+  /** The page's typed notes column (v4); null when the page has none. The editor owns its undo history, so this is not in snapshots. */
+  notes: NotesDoc | null;
+  /** Notes mode: the notes column takes pointer input and holds the caret. */
+  notesActive: boolean;
+  /** Measured world rect of the rendered column (transient); null when empty or not measured. */
+  notesBounds: Rect | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -391,8 +397,25 @@ export interface ShapeDef {
 /** The one serialization format: downloads, API `scene`, clipboard payload. UI state is never included. */
 export interface SceneFile {
   type: 'chalk/scene';
-  version: 3;
+  version: 4;
   elements: ChalkElement[];
+  /** v4: the page notes. Absent or null in older files. */
+  notes?: NotesDoc | null;
+}
+
+/** ProseMirror JSON, typed loosely; the editor drops node types it does not know. */
+export interface NotesJSON {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: NotesJSON[];
+  marks?: { type: string; attrs?: Record<string, unknown> }[];
+  text?: string;
+}
+
+export interface NotesDoc {
+  /** World px; stored per page so the column can later be resized. */
+  width: number;
+  doc: NotesJSON;
 }
 
 export interface BoardSummary {
@@ -485,6 +508,7 @@ export interface ChalkTestAppState {
   activePen: number;
   penButtonsSwapped: boolean;
   penTrayOpen: boolean;
+  notesActive: boolean;
   interaction: {
     marquee: Rect | null;
     bindTargetId: string | null;
@@ -503,6 +527,10 @@ export interface ChalkTestHook {
   /** Deep copy (structuredClone) of the elements. */
   getElements(): ChalkElement[];
   getSelectedIds(): string[];
+  /** Deep copy of the page notes (ProseMirror JSON + width), or null. */
+  getNotes(): NotesDoc | null;
+  /** The notes as plain text, top-level blocks joined by a newline. */
+  getNotesText(): string;
   getAppState(): ChalkTestAppState;
   /** World -> client px (includes the canvas offset, i.e. the open sidebar). */
   worldToScreen(p: Point): Point;

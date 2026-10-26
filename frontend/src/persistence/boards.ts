@@ -10,10 +10,10 @@ import {
   VIEWPORT_SAVE_DEBOUNCE_MS,
   VIEWPORT_STORAGE_PREFIX,
 } from '../constants';
-import { parseSceneFile } from '../core/serialize';
+import { parseSceneFile, parseSceneNotes } from '../core/serialize';
 import { clearHistory } from '../state/history';
 import { getState, notify, setInteraction, setState, setViewport, subscribe } from '../state/store';
-import type { Board, BoardSummary, ChalkElement, Viewport } from '../types';
+import type { Board, BoardSummary, ChalkElement, NotesDoc, Viewport } from '../types';
 import { api, ApiError } from './api';
 import { clearBackup, readBackup } from './backup';
 import { flushSave, forceSave, markClean } from './autosave';
@@ -164,10 +164,12 @@ export async function openBoard(id: string, opts?: { skipFlush?: boolean }): Pro
 
   const backup = readBackup(id);
   let restored: ChalkElement[] | null = null;
+  let restoredNotes: NotesDoc | null = null;
   if (backup) {
     if (backup.baseVersion === board.version) {
       try {
         restored = parseSceneFile(backup.scene);
+        restoredNotes = parseSceneNotes(backup.scene) ?? null;
       } catch {
         restored = null;
       }
@@ -175,7 +177,7 @@ export async function openBoard(id: string, opts?: { skipFlush?: boolean }): Pro
     if (!restored) clearBackup(id);
   }
   if (restored) {
-    loadIntoState(board, { elements: restored });
+    loadIntoState(board, { elements: restored, notes: restoredNotes });
     notify('Restored unsaved changes from this browser');
   } else {
     loadIntoState(board);
@@ -183,21 +185,27 @@ export async function openBoard(id: string, opts?: { skipFlush?: boolean }): Pro
   replaceUrl(id);
 }
 
-export function loadIntoState(board: Board, opts?: { elements?: ChalkElement[] }): void {
+export function loadIntoState(board: Board, opts?: { elements?: ChalkElement[]; notes?: NotesDoc | null }): void {
   let serverEls: ChalkElement[];
+  let serverNotes: NotesDoc | null = null;
   try {
     serverEls = parseSceneFile(board.scene);
+    serverNotes = parseSceneNotes(board.scene) ?? null;
   } catch (e) {
     notify(e instanceof Error ? e.message : 'Could not read this board', 'error');
     serverEls = [];
   }
+  const notes = opts?.notes !== undefined ? opts.notes : serverNotes;
   const els = opts?.elements ?? serverEls;
   // A migrated (older-version) file is "unsaved" on purpose: a fresh array identity makes autosave write the v2 file back once.
   const migrated = (board.scene.version as number) < SCENE_FILE_VERSION;
-  markClean(migrated && !opts?.elements ? [...serverEls] : serverEls, board.name);
+  markClean(migrated && !opts?.elements ? [...serverEls] : serverEls, board.name, serverNotes);
   setState({
     board: { id: board.id, name: board.name, version: board.version, notebook: board.notebook ?? '', section: board.section ?? '' },
     elements: els,
+    notes,
+    notesActive: false,
+    notesBounds: null,
     selectedIds: [],
     editing: null,
     saveStatus: 'saved',

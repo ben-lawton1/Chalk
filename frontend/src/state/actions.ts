@@ -1,10 +1,12 @@
 // Command entry points for UI, keyboard, clipboard and tools: one undo entry per command (WP3).
-import type { ChalkElement, PenSettings, Point, ReorderDir, ShapeKind, Size, Snapshot, Style, ToolId, Viewport } from '../types';
+import type { AppState, ChalkElement, NotesDoc, PenSettings, Point, Rect, ReorderDir, ShapeKind, Size, Snapshot, Style, ToolId, Viewport } from '../types';
 import { DUPLICATE_OFFSET, FIT_MAX_ZOOM, FIT_PADDING_PX, ZOOM_STEP_FACTOR } from '../constants';
 import { SHAPES } from '../core/shapes';
 import { lineHeightPx, withMeasuredText } from '../core/text';
 import { fitToBounds, screenToWorld, viewportCenter, zoomAt } from '../core/viewport';
 import { getCommonBounds } from '../core/geometry';
+import { unionRects } from '../core/math';
+import { isNotesEmpty } from '../core/notes';
 import { updateBoundArrows } from '../core/binding';
 import {
   addElements, applyStyleToElements, cloneWithNewIds, createShape, createText, duplicateElements, fitShapeToLabel,
@@ -219,10 +221,12 @@ export function placeShape(kind: ShapeKind, screen: Point): string {
   return el.id;
 }
 
-export function replaceScene(elements: readonly ChalkElement[]): void {
+/** Replaces the elements (one undo entry) and, when `notes` is given, the page notes too (no undo entry: the editor owns its history). */
+export function replaceScene(elements: readonly ChalkElement[], notes?: NotesDoc | null): void {
   commitEditing();
   const before = takeSnapshot();
   setElements(elements);
+  if (notes !== undefined) setNotes(notes);
   setSelection([]);
   pushUndo(before);
   setInteraction({ hoverId: null, bindTarget: null });
@@ -340,8 +344,15 @@ export function goHome(): void {
   setViewport({ scrollX: 0, scrollY: 0, zoom: 1 });
 }
 
+/** Elements bounds plus the notes column when the notes are not empty (null when there is nothing). */
+export function contentBounds(s: AppState = getState()): Rect | null {
+  const els = getCommonBounds(s.elements);
+  if (!s.notesBounds || isNotesEmpty(s.notes)) return els;
+  return els ? unionRects(els, s.notesBounds) : s.notesBounds;
+}
+
 export function zoomToFit(opts?: { maxZoom?: number }): void {
-  const bounds = getCommonBounds(getState().elements);
+  const bounds = contentBounds();
   setViewport(fitToBounds(bounds, viewSize(), { padding: FIT_PADDING_PX, maxZoom: opts?.maxZoom ?? FIT_MAX_ZOOM }));
 }
 
@@ -365,6 +376,22 @@ export function openDialog(d: 'help'): void {
 
 export function closeDialog(): void {
   setState({ dialog: 'none' });
+}
+
+/** Replaces the page notes. No undo entry: the editor owns its history. */
+export function setNotes(notes: NotesDoc | null): void {
+  setState({ notes });
+}
+
+export function setNotesActive(on: boolean): void {
+  setState({ notesActive: on });
+}
+
+/** The measured world rect of the rendered notes column (null when not measured). */
+export function setNotesBounds(rect: Rect | null): void {
+  const cur = getState().notesBounds;
+  if (cur === rect || (cur && rect && cur.x === rect.x && cur.y === rect.y && cur.width === rect.width && cur.height === rect.height)) return;
+  setState({ notesBounds: rect });
 }
 
 export function setSidebarOpen(open: boolean): void {

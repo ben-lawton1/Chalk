@@ -1,6 +1,6 @@
 // Unit tests for state/actions (WP3).
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ArrowElement, ChalkElement, ShapeElement, TextElement } from '../types';
+import type { ArrowElement, ChalkElement, NotesDoc, ShapeElement, TextElement } from '../types';
 import { DEFAULT_STYLE, DUPLICATE_OFFSET } from '../constants';
 import { getBounds } from '../core/geometry';
 import { createInk } from '../core/ink';
@@ -10,7 +10,7 @@ import { clearHistory, getHistorySizes } from './history';
 import {
   applyStyle, closeDialog, commitEditing, copySelection, createTextAt, cutSelection, deleteSelection, duplicateSelection,
   editSelection, finishCreation, nudgeSelection, openDialog, pasteClipboard, pasteText, placeShape, redo, reorderSelection,
-  selectAll, setActivePen, setPenButtonsSwapped, setPenTrayOpen, setTool, startEditing, updatePen, toggleToolLock, undo, updateEditingText, zoomIn, zoomOut, zoomToFit, zoomToSelection, resetZoom, goHome,
+  selectAll, setActivePen, setPenButtonsSwapped, setPenTrayOpen, setTool, startEditing, updatePen, toggleToolLock, undo, updateEditingText, zoomIn, zoomOut, zoomToFit, zoomToSelection, resetZoom, goHome, replaceScene, setNotes, setNotesActive, setNotesBounds,
 } from './actions';
 
 function rect(id: string, x: number, y: number, w = 100, h = 60): ShapeElement {
@@ -446,5 +446,61 @@ describe('pens and the pen tray (v3)', () => {
     expect(getState().editing).toBeNull();
     expect(editSelection()).toBe(false);
     expect(getState().editing).toBeNull();
+  });
+});
+
+describe('page notes', () => {
+  const full: NotesDoc = { width: 760, doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hi' }] }] } };
+  const empty: NotesDoc = { width: 760, doc: { type: 'doc', content: [{ type: 'paragraph' }] } };
+
+  it('setNotes, setNotesActive and setNotesBounds set state and push no undo entry', () => {
+    setNotes(full);
+    setNotesActive(true);
+    setNotesBounds({ x: 48, y: 48, width: 760, height: 100 });
+    expect(getState().notes).toBe(full);
+    expect(getState().notesActive).toBe(true);
+    expect(getState().notesBounds).toEqual({ x: 48, y: 48, width: 760, height: 100 });
+    expect(getHistorySizes().past).toBe(0);
+    setNotes(null);
+    expect(getState().notes).toBeNull();
+  });
+  it('setNotesBounds ignores an equal rect (no notification)', () => {
+    setNotesBounds({ x: 1, y: 2, width: 3, height: 4 });
+    const cur = getState().notesBounds;
+    setNotesBounds({ x: 1, y: 2, width: 3, height: 4 });
+    expect(getState().notesBounds).toBe(cur);
+  });
+  it('replaceScene carries notes when given, keeps them when omitted, and undo leaves them alone', () => {
+    setNotes(full);
+    replaceScene([rect('a', 0, 0)]);
+    expect(getState().notes).toBe(full);
+    replaceScene([rect('b', 0, 0)], empty);
+    expect(getState().notes).toBe(empty);
+    replaceScene([], null);
+    expect(getState().notes).toBeNull();
+    undo();
+    expect(ids()).toEqual(['b']);
+    expect(getState().notes).toBeNull();
+  });
+  it('zoomToFit includes the notes column when the notes are not empty', () => {
+    setState({ viewportSize: { width: 800, height: 600 }, notes: full, notesBounds: { x: 48, y: 48, width: 760, height: 400 } });
+    zoomToFit();
+    expect(getState().viewport.zoom).toBeCloseTo(672 / 760);
+  });
+  it('zoomToFit ignores empty notes and a missing measurement', () => {
+    setState({ viewportSize: { width: 800, height: 600 }, notes: empty, notesBounds: { x: 48, y: 48, width: 760, height: 400 } });
+    zoomToFit();
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+    setState({ notes: full, notesBounds: null });
+    zoomToFit();
+    expect(getState().viewport.zoom).toBe(1);
+  });
+  it('copied clipboard payloads never carry notes', () => {
+    setNotes(full);
+    setElements([rect('a', 0, 0)]);
+    setSelection(['a']);
+    const buffer = copySelection()!;
+    expect('notes' in JSON.parse(buffer)).toBe(false);
+    expect(JSON.parse(buffer).version).toBe(4);
   });
 });

@@ -23,7 +23,7 @@ import type {
 export const APP_NAME = 'Chalk';
 export const APP_VERSION = '0.1.0';
 export const SCENE_FILE_TYPE = 'chalk/scene' as const;
-export const SCENE_FILE_VERSION = 3 as const;
+export const SCENE_FILE_VERSION = 4 as const;
 
 // ---------------------------------------------------------------------------
 // Viewport
@@ -229,3 +229,23 @@ export const PEN_HANDLE_HIT_PX = 16;
 /** Touches are ignored this long (ms) after the last pen event (palm rejection). */
 export const PALM_GRACE_MS = 500;
 export const PEN_PREFS_STORAGE_KEY = 'chalk:pens';
+
+// ---------------------------------------------------------------------------
+// Page notes (v4)
+// ---------------------------------------------------------------------------
+/** Top-left of the notes column in world px: just inside the page's home corner. */
+export const NOTES_X = PAGE_MARGIN + 16;
+export const NOTES_Y = PAGE_MARGIN + 16;
+export const NOTES_WIDTH = 760;
+export const NOTES_MIN_WIDTH = 320;
+export const NOTES_MAX_WIDTH = 2000;
+export const NOTES_FONT_SIZE = 16;
+/** localStorage key prefix for the last caret position per page: `chalk:notes-caret:<boardId>`. */
+export const NOTES_CARET_KEY = 'chalk:notes-caret:';
+/** Limits applied when a notes document is read from a file: nesting depth, node count and text length. */
+export const NOTES_MAX_DEPTH = 32;
+export const NOTES_MAX_NODES = 100_000;
+export const NOTES_MAX_TEXT_LENGTH = 2_000_000;
+/** The /table prompt clamps to these. */
+export const TABLE_MAX_ROWS = 50;
+export const TABLE_MAX_COLS = 12;

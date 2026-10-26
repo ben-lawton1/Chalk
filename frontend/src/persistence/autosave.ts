@@ -8,7 +8,7 @@ import {
 } from '../constants';
 import { toSceneFile } from '../core/serialize';
 import { getState, notify, setState, subscribe } from '../state/store';
-import type { ChalkElement, SceneFile } from '../types';
+import type { ChalkElement, NotesDoc, SceneFile } from '../types';
 import { api, ApiError } from './api';
 import { clearBackup, writeBackup } from './backup';
 
@@ -19,7 +19,7 @@ interface SaveOptions {
   force?: boolean;
 }
 
-let lastSaved: { elements: readonly ChalkElement[]; name: string } = { elements: [], name: '' };
+let lastSaved: { elements: readonly ChalkElement[]; name: string; notes: NotesDoc | null } = { elements: [], name: '', notes: null };
 let timer: Timer | null = null;
 let retryTimer: Timer | null = null;
 let firstDirtyAt = 0;
@@ -35,16 +35,16 @@ function clearTimers(): void {
   retryTimer = null;
 }
 
-/** True when the loaded board has changes (elements or name) the server has not acknowledged. */
+/** True when the loaded board has changes (elements, notes or name) the server has not acknowledged. */
 export function isDirty(): boolean {
-  const { board, elements } = getState();
-  return board !== null && (elements !== lastSaved.elements || board.name !== lastSaved.name);
+  const { board, elements, notes } = getState();
+  return board !== null && (elements !== lastSaved.elements || notes !== lastSaved.notes || board.name !== lastSaved.name);
 }
 
-/** Records the given (default: current) elements and name as saved, and cancels pending saves. Does not touch saveStatus. */
-export function markClean(elements?: readonly ChalkElement[], name?: string): void {
+/** Records the given (default: current) elements, name and notes as saved, and cancels pending saves. Does not touch saveStatus. */
+export function markClean(elements?: readonly ChalkElement[], name?: string, notes?: NotesDoc | null): void {
   const s = getState();
-  lastSaved = { elements: elements ?? s.elements, name: name ?? s.board?.name ?? '' };
+  lastSaved = { elements: elements ?? s.elements, name: name ?? s.board?.name ?? '', notes: notes !== undefined ? notes : s.notes };
   clearTimers();
   firstDirtyAt = 0;
   retryDelay = 0;
@@ -66,11 +66,11 @@ function currentBoardId(): string | null {
 }
 
 /** Handles a save the server accepted (or already holds): adopt `version` (and a server-changed `serverName`) and mark what was sent as clean. */
-function onSaved(boardId: string, elements: readonly ChalkElement[], name: string, version: number, serverName?: string): void {
+function onSaved(boardId: string, elements: readonly ChalkElement[], notes: NotesDoc | null, name: string, version: number, serverName?: string): void {
   if (currentBoardId() !== boardId) return;
   // The server may have changed the name (collision suffix, invalid characters): adopt it unless the user has typed since.
   const adopted = serverName !== undefined && serverName !== name && getState().board?.name === name ? serverName : name;
-  lastSaved = { elements, name: adopted };
+  lastSaved = { elements, name: adopted, notes };
   retryDelay = 0;
   clearBackup(boardId);
   setState((s) => ({ board: s.board && { ...s.board, version, ...(adopted !== name ? { name: adopted } : {}) } }));
@@ -79,24 +79,25 @@ function onSaved(boardId: string, elements: readonly ChalkElement[], name: strin
   if (dirty) schedule();
 }
 
-async function run(boardId: string, elements: readonly ChalkElement[], name: string, version: number, o: SaveOptions): Promise<void> {
+async function run(boardId: string, elements: readonly ChalkElement[], notes: NotesDoc | null, name: string, version: number, o: SaveOptions): Promise<void> {
   try {
-    const scene = toSceneFile(elements);
+    const scene = toSceneFile(elements, notes);
     const body = o.force ? { name, scene } : { name, scene, baseVersion: version };
     const resp = await api.updateBoard(boardId, body, { keepalive: o.keepalive });
-    onSaved(boardId, elements, name, resp.version, resp.name);
+    onSaved(boardId, elements, notes, name, resp.version, resp.name);
   } catch (e) {
-    await onFailure(e, boardId, elements, name, version);
+    await onFailure(e, boardId, elements, notes, name, version);
   }
 }
 
-async function onFailure(e: unknown, boardId: string, elements: readonly ChalkElement[], name: string, version: number): Promise<void> {
+async function onFailure(e: unknown, boardId: string, elements: readonly ChalkElement[], notes: NotesDoc | null, name: string, version: number): Promise<void> {
   if (e instanceof ApiError && e.status === 409) {
     // A fast reload can race the keepalive PUT of the previous page: if the server already holds exactly this, adopt it.
     try {
       const fresh = await api.getBoard(boardId);
-      if (fresh.name === name && JSON.stringify(fresh.scene.elements) === JSON.stringify(elements)) {
-        onSaved(boardId, elements, name, fresh.version);
+      if (fresh.name === name && JSON.stringify(fresh.scene.elements) === JSON.stringify(elements)
+        && JSON.stringify(fresh.scene.notes ?? null) === JSON.stringify(notes)) {
+        onSaved(boardId, elements, notes, name, fresh.version);
         return;
       }
     } catch {
@@ -107,7 +108,7 @@ async function onFailure(e: unknown, boardId: string, elements: readonly ChalkEl
   }
   let scene: SceneFile | undefined;
   try {
-    scene = toSceneFile(elements);
+    scene = toSceneFile(elements, notes);
   } catch {
     scene = undefined;
   }
@@ -142,9 +143,9 @@ function save(o: SaveOptions = {}): Promise<void> {
   }
   clearTimers();
   firstDirtyAt = 0;
-  const { elements } = s;
+  const { elements, notes } = s;
   setState({ saveStatus: 'saving' });
-  const p: Promise<void> = run(board.id, elements, board.name, board.version, o).finally(() => {
+  const p: Promise<void> = run(board.id, elements, notes, board.name, board.version, o).finally(() => {
     if (inFlight === p) inFlight = null;
     if (queued) {
       queued = false;
@@ -174,9 +175,9 @@ export async function forceSave(): Promise<void> {
 function leavePage(): void {
   try {
     if (!isDirty()) return;
-    const { board, elements } = getState();
+    const { board, elements, notes } = getState();
     if (!board) return;
-    const scene = toSceneFile(elements);
+    const scene = toSceneFile(elements, notes);
     writeBackup({ boardId: board.id, baseVersion: board.version, savedAt: new Date().toISOString(), name: board.name, scene });
     if (JSON.stringify(scene).length < KEEPALIVE_MAX_BYTES) flushSave({ keepalive: true }).catch(() => undefined);
   } catch {
@@ -189,7 +190,7 @@ export function startAutosave(): () => void {
   if (detachCurrent) detachCurrent();
 
   const unsubscribe = subscribe((s, prev) => {
-    if (s.elements === prev.elements && s.board?.name === prev.board?.name) return;
+    if (s.elements === prev.elements && s.notes === prev.notes && s.board?.name === prev.board?.name) return;
     if (!s.board || s.saveStatus === 'conflict' || s.saveStatus === 'loading') return;
     if (!isDirty()) {
       if (s.saveStatus === 'dirty') setState({ saveStatus: 'saved' });
@@ -236,7 +237,7 @@ export function startAutosave(): () => void {
 export function resetAutosaveForTests(): void {
   if (detachCurrent) detachCurrent();
   clearTimers();
-  lastSaved = { elements: [], name: '' };
+  lastSaved = { elements: [], name: '', notes: null };
   firstDirtyAt = 0;
   inFlight = null;
   queued = false;

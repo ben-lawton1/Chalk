@@ -81,7 +81,7 @@ export function TopBar() {
     const file = input.files?.[0];
     if (!file) return;
     importSceneJson(file)
-      .then((els) => replaceScene(els))
+      .then(({ elements, notes }) => replaceScene(elements, notes ?? undefined))
       .catch((err: unknown) => notify('Could not import: ' + (err instanceof Error ? err.message : String(err)), 'error'))
       .finally(() => { input.value = ''; });
   }
@@ -158,7 +158,7 @@ export function TopBar() {
               </button>
               <button type="button" role="menuitem" className="menu-item" data-testid={TID.menuExportJson}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => run(() => exportSceneJson(getState().elements, currentBoardName()))}>
+                onClick={() => run(() => exportSceneJson(getState().elements, currentBoardName(), getState().notes))}>
                 Export as JSON
               </button>
               <button type="button" role="menuitem" className="menu-item" data-testid={TID.menuExportPng}

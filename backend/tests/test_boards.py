@@ -5,10 +5,10 @@ import time
 
 import pytest
 
-from app.models import MAX_SCENE_BYTES
+from app.models import MAX_SCENE_BYTES, SCENE_VERSION
 
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
-EMPTY = {"type": "chalk/scene", "version": 3, "elements": []}
+EMPTY = {"type": "chalk/scene", "version": 4, "elements": []}
 
 
 def test_create_default(client):
@@ -166,6 +166,29 @@ def test_413(client, monkeypatch):
     r = client.put(f"/api/boards/{b['id']}", json={"scene": big})
     assert r.status_code == 413
     assert client.get(f"/api/boards/{b['id']}").json()["version"] == 1
+
+
+def test_scene_version_is_4():
+    assert SCENE_VERSION == 4
+
+
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
+def test_envelope_accepts_versions_1_to_4(client, version):
+    scene = {"type": "chalk/scene", "version": version, "elements": []}
+    r = client.post("/api/boards", json={"scene": scene})
+    assert r.status_code == 201
+    assert r.json()["scene"] == scene
+
+
+def test_v4_notes_round_trip_opaque(client):
+    notes = {"width": 760, "doc": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "hi"}]}]}}
+    scene = {"type": "chalk/scene", "version": 4, "elements": [], "notes": notes}
+    b = client.post("/api/boards", json={"scene": scene}).json()
+    assert b["scene"] == scene
+    scene2 = {**scene, "notes": None}
+    r = client.put(f"/api/boards/{b['id']}", json={"scene": scene2, "baseVersion": b["version"]})
+    assert r.status_code == 200
+    assert client.get(f"/api/boards/{b['id']}").json()["scene"] == scene2
 
 
 def test_size_limit_constant():
