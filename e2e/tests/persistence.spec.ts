@@ -2,9 +2,12 @@ import {
   test,
   expect,
   TID,
-  tidBoardRow,
-  tidBoardOpen,
-  tidBoardDelete,
+  tidPage,
+  tidSection,
+  tidRowMenu,
+  tidRowDelete,
+  tidRowAdd,
+  withSidebar,
   els,
   app,
   last,
@@ -136,9 +139,11 @@ test('PER-4: rename the board', async ({ page, request }) => {
   await name.blur();
 });
 
-test('PER-5: multiple boards: new, list, open, delete', async ({ page, request }) => {
+test('PER-5: multiple pages: new, open and delete through the sidebar', async ({ page, request }) => {
+  await withSidebar(page);
   const id1 = await freshBoard(page, request, 'First');
-  await draw(page, 'r', { x: 400, y: 250 }, { x: 560, y: 350 });
+  await draw(page, 'r', { x: 700, y: 250 }, { x: 860, y: 350 });
+  const home = await getBoard(request, id1);
 
   await menu(page, TID.menuNewBoard);
   await expect.poll(() => boardParam(page)).not.toBe(id1);
@@ -148,31 +153,31 @@ test('PER-5: multiple boards: new, list, open, delete', async ({ page, request }
   await expect(page.getByTestId(TID.welcomeHint)).toBeVisible();
   await expect(page.getByTestId(TID.boardName)).toHaveValue(/^Untitled page( \(\d+\))?$/);
   expect((await getBoard(request, id1)).scene.elements).toHaveLength(1);
+  expect((await getBoard(request, id2)).section).toBe(home.section); // "New page" stays in the current section
 
-  await menu(page, TID.menuOpenBoards);
-  await expect(page.getByTestId(TID.boardList)).toBeVisible();
-  await expect(page.getByTestId(tidBoardRow(id1))).toBeVisible();
-  await expect(page.getByTestId(tidBoardRow(id2))).toBeVisible();
+  const row1 = page.getByTestId(tidPage(id1));
+  const row2 = page.getByTestId(tidPage(id2));
+  await expect(row1).toBeVisible();
+  await expect(row2).toHaveAttribute('data-current', 'true');
 
-  await page.getByTestId(tidBoardOpen(id1)).click();
-  await expect(page.getByTestId(TID.boardList)).toBeHidden();
+  await row1.click();
   await expect.poll(() => boardParam(page)).toBe(id1);
   await expect.poll(async () => (await els(page)).length).toBe(1);
+  await expect(row1).toHaveAttribute('data-current', 'true');
 
-  await menu(page, TID.menuOpenBoards);
-  const del = page.getByTestId(tidBoardDelete(id2));
+  await row2.hover();
+  await page.getByTestId(tidRowMenu(`page:${id2}`)).click();
+  const del = page.getByTestId(tidRowDelete(`page:${id2}`));
   await del.click();
   await expect(del).toHaveText('Confirm');
   await del.click();
-  await expect(page.getByTestId(tidBoardRow(id2))).toHaveCount(0);
+  await expect(row2).toHaveCount(0);
   expect((await request.get(`/api/boards/${id2}`)).status()).toBe(404);
+  expect(boardParam(page)).toBe(id1);
 
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId(TID.boardList)).toBeHidden();
-
-  await menu(page, TID.menuOpenBoards);
-  await page.getByTestId(TID.boardListNew).click();
-  await expect(page.getByTestId(TID.boardList)).toBeHidden();
+  // "+" on the section row adds a page there and opens it
+  await page.getByTestId(tidSection(home.notebook, home.section)).hover();
+  await page.getByTestId(tidRowAdd(`sec:${home.notebook}/${home.section}`)).click();
   await expect.poll(() => boardParam(page)).not.toBe(id1);
   await expect.poll(async () => (await app(page)).boardId).toBe(boardParam(page));
   expect(await els(page)).toEqual([]);

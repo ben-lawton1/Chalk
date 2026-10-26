@@ -9,7 +9,9 @@ import {
   app,
   selected,
   last,
-  freshBoard,
+  newBoard,
+  openBoard,
+  tidPage,
   paletteDrag,
   drag,
   shot,
@@ -30,7 +32,21 @@ async function label(page: Page, x: number, y: number, text: string): Promise<vo
 
 test('TOUR-1: a full user journey', async ({ page, request }) => {
   test.setTimeout(60_000);
-  await freshBoard(page, request, 'Chalk tour');
+  // The tour owns two notebooks; the sidebar screenshot hides whatever other specs left in the shared test library.
+  const keep = ['Product', 'Personal'];
+  await page.route('**/api/library', async (route) => {
+    const res = await route.fetch();
+    const tree = await res.json();
+    tree.notebooks = tree.notebooks.filter((n: { name: string }) => keep.includes(n.name));
+    tree.path = 'C:/Users/you/Documents/Chalk';
+    await route.fulfill({ response: res, json: tree });
+  });
+  for (const name of ['Roadmap', 'Design ideas', 'Retro']) {
+    await newBoard(request, { name, notebook: 'Product', section: 'Planning' });
+  }
+  await newBoard(request, { name: 'Reading list', notebook: 'Personal', section: 'Home' });
+  const tour = await newBoard(request, { name: 'Chalk tour', notebook: 'Product', section: 'Planning' });
+  await openBoard(page, tour.id);
   await expect(page.getByTestId(TID.welcomeHint)).toBeVisible();
   await shot(page, 'tour-01-empty');
 
@@ -85,6 +101,12 @@ test('TOUR-1: a full user journey', async ({ page, request }) => {
   // wait for the autosave so the README screenshot shows the "Saved" pill
   await expect.poll(async () => (await app(page)).saveStatus, { timeout: 15_000 }).toBe('saved');
   await shot(page, 'tour-04-connected');
+
+  // README screenshot: the same board with the sidebar open
+  await page.getByTestId(TID.sidebarToggle).click();
+  await expect(page.getByTestId(tidPage(tour.id))).toHaveAttribute('data-current', 'true');
+  await expect.poll(async () => (await page.getByTestId(TID.canvasInteractive).boundingBox())?.x).toBe(264);
+  await page.mouse.move(1200, 760);
   await shot(page, 'tour');
 
   const all = await els(page);

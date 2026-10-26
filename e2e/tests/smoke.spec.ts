@@ -59,7 +59,6 @@ test('SMK-1: the app boots on / and the chrome is complete', async ({ page, requ
   // Menu
   const items = [
     TID.menuNewBoard,
-    TID.menuOpenBoards,
     TID.menuImport,
     TID.menuExportJson,
     TID.menuExportPng,

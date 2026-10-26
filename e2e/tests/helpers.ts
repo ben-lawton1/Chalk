@@ -21,6 +21,19 @@ type Mod = 'Shift' | 'Alt' | 'Control' | 'Space';
  * 404/409/aborted requests) and expects none at teardown.
  */
 export const test = base.extend<{ pageErrors: string[] }>({
+  // The sidebar starts closed so a canvas point equals its client point (specs that need it call withSidebar).
+  page: async ({ page }, use) => {
+    await page.addInitScript(() => {
+      try {
+        if (localStorage.getItem('chalk:sidebar') === null) {
+          localStorage.setItem('chalk:sidebar', JSON.stringify({ open: false, expanded: [] }));
+        }
+      } catch {
+        /* storage unavailable */
+      }
+    });
+    await use(page);
+  },
   pageErrors: [
     async ({ page }, use) => {
       const errors: string[] = [];
@@ -85,8 +98,8 @@ export function flush(page: Page): Promise<string> {
 
 export async function newBoard(
   request: APIRequestContext,
-  body: { name?: string; scene?: object } = {},
-): Promise<{ id: string; version: number; name: string }> {
+  body: { name?: string; scene?: object; notebook?: string; section?: string } = {},
+): Promise<{ id: string; version: number; name: string; notebook: string; section: string }> {
   const res = await request.post('/api/boards', { data: body });
   expect(res.status(), 'POST /api/boards').toBe(201);
   return res.json();
@@ -113,6 +126,21 @@ export async function openBoard(page: Page, id: string, opts: { identityViewport
   }
   await page.goto(`/?board=${id}`);
   await waitReady(page);
+}
+
+/** Opt in to an open sidebar for this page (call before the first navigation; later reloads keep what the app persisted). */
+export async function withSidebar(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      // Seed once per tab: a reload must keep whatever the app persisted since.
+      if (sessionStorage.getItem('e2e:sidebar-seeded') === null) {
+        sessionStorage.setItem('e2e:sidebar-seeded', '1');
+        localStorage.setItem('chalk:sidebar', JSON.stringify({ open: true, expanded: [] }));
+      }
+    } catch {
+      /* storage unavailable */
+    }
+  });
 }
 
 /** Poll isReady() then wait for the canvas to settle. */
