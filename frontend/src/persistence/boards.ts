@@ -196,7 +196,7 @@ export function loadIntoState(board: Board, opts?: { elements?: ChalkElement[] }
   const migrated = (board.scene.version as number) < SCENE_FILE_VERSION;
   markClean(migrated && !opts?.elements ? [...serverEls] : serverEls, board.name);
   setState({
-    board: { id: board.id, name: board.name, version: board.version },
+    board: { id: board.id, name: board.name, version: board.version, notebook: board.notebook ?? '', section: board.section ?? '' },
     elements: els,
     selectedIds: [],
     editing: null,
@@ -209,7 +209,8 @@ export function loadIntoState(board: Board, opts?: { elements?: ChalkElement[] }
   setInteraction({ hoverId: null, bindTarget: null });
 }
 
-export async function createBoard(name?: string): Promise<void> {
+/** Creates a page and opens it. The location defaults to the current page's notebook and section. */
+export async function createBoard(name?: string, location?: { notebook: string; section: string }): Promise<void> {
   if (getState().board) {
     try {
       await flushSave();
@@ -218,7 +219,9 @@ export async function createBoard(name?: string): Promise<void> {
       return;
     }
   }
-  const board = await api.createBoard(name ? { name } : {});
+  const cur = getState().board;
+  const where = location ?? (cur && cur.notebook && cur.section ? { notebook: cur.notebook, section: cur.section } : undefined);
+  const board = await api.createBoard({ ...(name ? { name } : {}), ...(where ?? {}) });
   loadIntoState(board);
   replaceUrl(board.id);
 }
@@ -232,6 +235,11 @@ export async function deleteBoard(id: string): Promise<void> {
   clearBackup(id);
   removeViewport(id);
   if (getState().board?.id !== id) return;
+  await openFirstOrCreate();
+}
+
+/** After the current page vanished (deleted with its section or notebook): open the most recent page, or start a new one. */
+export async function openFirstOrCreate(): Promise<void> {
   setState({ board: null }); // autosave ignores a null board
   const list = await listBoards();
   const first = list[0];

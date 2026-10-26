@@ -1,7 +1,7 @@
 /**
- * data-testid contract shared by the UI (WP4) and the Playwright suite (WP6).
+ * data-testid contract shared by the UI and the Playwright suite.
  *
- * FROZEN after WP0. A byte-identical copy lives at e2e/tests/testids.ts.
+ * Frozen after v1 WP0; v2 may edit it (keep both copies identical). A byte-identical copy lives at e2e/tests/testids.ts.
  * This file must stay self-contained: NO imports.
  */
 
@@ -43,7 +43,6 @@ export const TID = {
   // Main menu
   menuButton: 'menu-button',
   menuNewBoard: 'menu-new-board',
-  menuOpenBoards: 'menu-open-boards',
   menuImport: 'menu-import',
   menuExportJson: 'menu-export-json',
   menuExportPng: 'menu-export-png',
@@ -59,10 +58,15 @@ export const TID = {
   conflictReload: 'conflict-reload',
   conflictOverwrite: 'conflict-overwrite',
 
-  // Boards dialog (rows use tidBoardRow / tidBoardOpen / tidBoardDelete)
-  boardList: 'board-list',
-  boardListNew: 'board-list-new',
-  boardListClose: 'board-list-close',
+  // Sidebar (rows use tidNotebook / tidSection / tidPage and the tidRow* helpers)
+  sidebar: 'sidebar',
+  sidebarToggle: 'sidebar-toggle',
+  sidebarCollapse: 'sidebar-collapse',
+  sidebarNewNotebook: 'sidebar-new-notebook',
+  sidebarPath: 'sidebar-path',
+  sidebarRetry: 'sidebar-retry',
+  renameInput: 'rename-input',
+  breadcrumb: 'breadcrumb',
 
   // Help, toast, hints
   helpButton: 'help-button',
@@ -99,8 +103,14 @@ export const tidAlign = (align: string): string => `style-align-${align}`;
 export const tidStartHead = (head: string): string => `style-starthead-${head}`;
 /** 'none' | 'arrow' | 'triangle' */
 export const tidEndHead = (head: string): string => `style-endhead-${head}`;
-/** Row of a board in the boards dialog. */
-export const tidBoardRow = (id: string): string => `board-row-${id}`;
-export const tidBoardOpen = (id: string): string => `board-open-${id}`;
+/** Sidebar rows. Keys: `nb:<name>`, `sec:<nb>/<sec>`, `page:<id>`. */
+export const tidNotebook = (nb: string): string => `sidebar-nb-${nb}`;
+export const tidSection = (nb: string, sec: string): string => `sidebar-sec-${nb}/${sec}`;
+export const tidPage = (id: string): string => `sidebar-page-${id}`;
+/** The ⋯ button of a row. */
+export const tidRowMenu = (key: string): string => `row-menu-${key}`;
+export const tidRowRename = (key: string): string => `row-rename-${key}`;
 /** First click shows "Confirm", second click (within DELETE_CONFIRM_MS) deletes. */
-export const tidBoardDelete = (id: string): string => `board-delete-${id}`;
+export const tidRowDelete = (key: string): string => `row-delete-${key}`;
+/** The + button of a notebook (adds a section) or section (adds a page). */
+export const tidRowAdd = (key: string): string => `row-add-${key}`;

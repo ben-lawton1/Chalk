@@ -65,13 +65,15 @@ function currentBoardId(): string | null {
   return getState().board?.id ?? null;
 }
 
-/** Handles a save the server accepted (or already holds): adopt `version` and mark what was sent as clean. */
-function onSaved(boardId: string, elements: readonly ChalkElement[], name: string, version: number): void {
+/** Handles a save the server accepted (or already holds): adopt `version` (and a server-changed `serverName`) and mark what was sent as clean. */
+function onSaved(boardId: string, elements: readonly ChalkElement[], name: string, version: number, serverName?: string): void {
   if (currentBoardId() !== boardId) return;
-  lastSaved = { elements, name };
+  // The server may have changed the name (collision suffix, invalid characters): adopt it unless the user has typed since.
+  const adopted = serverName !== undefined && serverName !== name && getState().board?.name === name ? serverName : name;
+  lastSaved = { elements, name: adopted };
   retryDelay = 0;
   clearBackup(boardId);
-  setState((s) => ({ board: s.board && { ...s.board, version } }));
+  setState((s) => ({ board: s.board && { ...s.board, version, ...(adopted !== name ? { name: adopted } : {}) } }));
   const dirty = isDirty();
   setState({ saveStatus: dirty ? 'dirty' : 'saved' });
   if (dirty) schedule();
@@ -82,7 +84,7 @@ async function run(boardId: string, elements: readonly ChalkElement[], name: str
     const scene = toSceneFile(elements);
     const body = o.force ? { name, scene } : { name, scene, baseVersion: version };
     const resp = await api.updateBoard(boardId, body, { keepalive: o.keepalive });
-    onSaved(boardId, elements, name, resp.version);
+    onSaved(boardId, elements, name, resp.version, resp.name);
   } catch (e) {
     await onFailure(e, boardId, elements, name, version);
   }

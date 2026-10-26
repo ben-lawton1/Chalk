@@ -5,7 +5,7 @@ import { toolForKey } from '../tools';
 import { getState, notify } from '../state/store';
 import {
   clearSelection, closeDialog, deleteSelection, duplicateSelection, editSelection, goHome, nudgeSelection, openDialog, redo,
-  reorderSelection, resetZoom, selectAll, setTool, toggleToolLock, undo, zoomIn, zoomOut, zoomToFit, zoomToSelection,
+  reorderSelection, resetZoom, selectAll, setTool, toggleSidebar, toggleToolLock, undo, zoomIn, zoomOut, zoomToFit, zoomToSelection,
 } from '../state/actions';
 import { flushSave } from '../persistence/autosave';
 import { cancelGesture, isTextEntry } from './pointer';
@@ -92,6 +92,10 @@ export function handleKeyDown(e: KeyLike): boolean {
     }
     if (lower === 'a') {
       selectAll();
+      return true;
+    }
+    if (code === 'Backslash') {
+      toggleSidebar();
       return true;
     }
     if (code === 'BracketRight') {
@@ -231,6 +235,7 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'Ctrl + = / Ctrl + −', description: 'Zoom in / out', group: 'View' },
   { keys: 'Ctrl + 0', description: 'Zoom to 100%', group: 'View' },
   { keys: 'Home', description: 'Back to the top-left of the page', group: 'View' },
+  { keys: 'Ctrl + \\', description: 'Show or hide the sidebar', group: 'View' },
   { keys: 'Shift + 1', description: 'Zoom to fit everything', group: 'View' },
   { keys: 'Shift + 2', description: 'Zoom to selection', group: 'View' },
   { keys: 'Ctrl + S', description: 'Save now', group: 'File' },

@@ -328,13 +328,21 @@ export function zoomToSelection(): void {
 // Dialogs and font loading
 // ---------------------------------------------------------------------------
 
-export function openDialog(d: 'boards' | 'help'): void {
+export function openDialog(d: 'help'): void {
   commitEditing();
   setState({ dialog: d });
 }
 
 export function closeDialog(): void {
   setState({ dialog: 'none' });
+}
+
+export function setSidebarOpen(open: boolean): void {
+  setState({ sidebarOpen: open });
+}
+
+export function toggleSidebar(): void {
+  setState((s) => ({ sidebarOpen: !s.sidebarOpen }));
 }
 
 export function remeasureText(): void {

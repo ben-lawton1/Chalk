@@ -1,5 +1,5 @@
 // Typed fetch client for the /api backend; non-2xx becomes ApiError (WP5).
-import type { Board, BoardCreateRequest, BoardSummary, BoardUpdateRequest, HealthResponse } from '../types';
+import type { Board, BoardCreateRequest, BoardSummary, BoardUpdateRequest, FolderInfo, HealthResponse, LibraryTree } from '../types';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -19,6 +19,13 @@ export interface Api {
   createBoard(body: BoardCreateRequest): Promise<Board>;
   updateBoard(id: string, body: BoardUpdateRequest, opts?: { keepalive?: boolean }): Promise<BoardSummary>;
   deleteBoard(id: string): Promise<void>;
+  getLibrary(): Promise<LibraryTree>;
+  createNotebook(name: string): Promise<FolderInfo>;
+  renameNotebook(notebook: string, name: string): Promise<FolderInfo>;
+  deleteNotebook(notebook: string): Promise<void>;
+  createSection(notebook: string, name: string): Promise<FolderInfo>;
+  renameSection(notebook: string, section: string, name: string): Promise<FolderInfo>;
+  deleteSection(notebook: string, section: string): Promise<void>;
 }
 
 function errorMessage(status: number, body: unknown): string {
@@ -60,4 +67,11 @@ export const api: Api = {
   createBoard: (body) => request<Board>('POST', '/boards', body),
   updateBoard: (id, body, opts) => request<BoardSummary>('PUT', `/boards/${enc(id)}`, body, opts?.keepalive),
   deleteBoard: (id) => request<void>('DELETE', `/boards/${enc(id)}`),
+  getLibrary: () => request<LibraryTree>('GET', '/library'),
+  createNotebook: (name) => request<FolderInfo>('POST', '/notebooks', { name }),
+  renameNotebook: (nb, name) => request<FolderInfo>('PUT', `/notebooks/${enc(nb)}`, { name }),
+  deleteNotebook: (nb) => request<void>('DELETE', `/notebooks/${enc(nb)}`),
+  createSection: (nb, name) => request<FolderInfo>('POST', `/notebooks/${enc(nb)}/sections`, { name }),
+  renameSection: (nb, sec, name) => request<FolderInfo>('PUT', `/notebooks/${enc(nb)}/sections/${enc(sec)}`, { name }),
+  deleteSection: (nb, sec) => request<void>('DELETE', `/notebooks/${enc(nb)}/sections/${enc(sec)}`),
 };

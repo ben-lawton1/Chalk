@@ -14,7 +14,7 @@ import type { Board, BoardSummary, ChalkElement, SceneFile } from '../types';
 import { api, ApiError } from './api';
 import { clearBackup, readBackup } from './backup';
 import type { BoardBackup } from './backup';
-import { isDirty, resetAutosaveForTests } from './autosave';
+import { isDirty, markClean, resetAutosaveForTests } from './autosave';
 import {
   createBoard,
   deleteBoard,
@@ -43,9 +43,9 @@ vi.mock('./backup');
 const el = (id: string): ChalkElement => ({ id }) as unknown as ChalkElement;
 const scene: SceneFile = { type: 'chalk/scene', version: 2, elements: [] };
 const board = (id: string, over: Partial<Board> = {}): Board => ({
-  id, name: 'Board ' + id, version: 3, updatedAt: 'x', createdAt: 'x', scene, ...over,
+  id, name: 'Board ' + id, version: 3, updatedAt: 'x', createdAt: 'x', scene, notebook: 'NB', section: 'Sec', ...over,
 });
-const sum = (id: string): BoardSummary => ({ id, name: 'Board ' + id, version: 1, updatedAt: 'x' });
+const sum = (id: string): BoardSummary => ({ id, name: 'Board ' + id, version: 1, updatedAt: 'x', notebook: 'NB', section: 'Sec' });
 
 interface FakeWindow { replaceState: ReturnType<typeof vi.fn>; store: Record<string, string> }
 
@@ -84,7 +84,7 @@ describe('initBoards', () => {
     await initBoards();
     expect(api.getBoard).toHaveBeenCalledWith('first1');
     expect(api.createBoard).not.toHaveBeenCalled();
-    expect(getState().board).toEqual({ id: 'first1', name: 'Board first1', version: 3 });
+    expect(getState().board).toEqual({ id: 'first1', name: 'Board first1', version: 3, notebook: 'NB', section: 'Sec' });
     expect(getState().saveStatus).toBe('saved');
     expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
   });
@@ -184,7 +184,7 @@ describe('openBoard and backups', () => {
   });
 
   it('loadIntoState resets selection, editing, dialog and history', () => {
-    resetState({ selectedIds: ['x'], dialog: 'boards', canUndo: true });
+    resetState({ selectedIds: ['x'], dialog: 'help', canUndo: true });
     loadIntoState(board('b9'));
     expect(getState().selectedIds).toEqual([]);
     expect(getState().dialog).toBe('none');
@@ -228,7 +228,7 @@ describe('openBoard and backups', () => {
   });
 
   it('a failed open keeps the previous status and rethrows', async () => {
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'saved' });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
     vi.mocked(api.getBoard).mockRejectedValue(new TypeError('offline'));
     await expect(openBoard('b1', { skipFlush: true })).rejects.toThrow('offline');
     expect(getState().saveStatus).toBe('saved');
@@ -237,7 +237,7 @@ describe('openBoard and backups', () => {
 
   it('flushes the current board first and aborts when that fails', async () => {
     const mine = [el('unsaved')];
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'dirty', elements: mine });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'dirty', elements: mine });
     vi.mocked(api.updateBoard).mockRejectedValue(new TypeError('offline'));
     await openBoard('b1');
     expect(api.getBoard).not.toHaveBeenCalled();
@@ -267,7 +267,7 @@ describe('createBoard and deleteBoard', () => {
     vi.mocked(api.createBoard).mockResolvedValue(board('made01', { name: 'Plan', version: 1 }));
     await createBoard('Plan');
     expect(api.createBoard).toHaveBeenCalledWith({ name: 'Plan' });
-    expect(getState().board).toEqual({ id: 'made01', name: 'Plan', version: 1 });
+    expect(getState().board).toEqual({ id: 'made01', name: 'Plan', version: 1, notebook: 'NB', section: 'Sec' });
   });
 
   it('createBoard without a name sends an empty body', async () => {
@@ -276,8 +276,25 @@ describe('createBoard and deleteBoard', () => {
     expect(api.createBoard).toHaveBeenCalledWith({});
   });
 
+  it("createBoard defaults to the current page's notebook and section", async () => {
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'Work', section: 'Projects' }, saveStatus: 'saved' });
+    markClean(undefined, 'Cur');
+    vi.mocked(api.createBoard).mockResolvedValue(board('made03', { version: 1, notebook: 'Work', section: 'Projects' }));
+    await createBoard();
+    expect(api.createBoard).toHaveBeenCalledWith({ notebook: 'Work', section: 'Projects' });
+  });
+
+  it('createBoard with an explicit location uses it', async () => {
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'Work', section: 'Projects' }, saveStatus: 'saved' });
+    markClean(undefined, 'Cur');
+    vi.mocked(api.createBoard).mockResolvedValue(board('made04', { version: 1, notebook: 'Home', section: 'Misc' }));
+    await createBoard('Idea', { notebook: 'Home', section: 'Misc' });
+    expect(api.createBoard).toHaveBeenCalledWith({ name: 'Idea', notebook: 'Home', section: 'Misc' });
+    expect(getState().board).toMatchObject({ notebook: 'Home', section: 'Misc' });
+  });
+
   it('createBoard does not create when the current board cannot be saved', async () => {
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'dirty', elements: [el('u')] });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'dirty', elements: [el('u')] });
     vi.mocked(api.updateBoard).mockRejectedValue(new TypeError('offline'));
     await createBoard('Other');
     expect(api.createBoard).not.toHaveBeenCalled();
@@ -285,7 +302,7 @@ describe('createBoard and deleteBoard', () => {
   });
 
   it('deleting a non-current board only cleans up', async () => {
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'saved' });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
     vi.mocked(api.deleteBoard).mockResolvedValue(undefined);
     await deleteBoard('other1');
     expect(api.deleteBoard).toHaveBeenCalledWith('other1');
@@ -295,7 +312,7 @@ describe('createBoard and deleteBoard', () => {
   });
 
   it('deleting the current board opens the first remaining one', async () => {
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'saved' });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
     vi.mocked(api.deleteBoard).mockResolvedValue(undefined);
     vi.mocked(api.listBoards).mockResolvedValue([sum('next01')]);
     vi.mocked(api.getBoard).mockResolvedValue(board('next01'));
@@ -304,7 +321,7 @@ describe('createBoard and deleteBoard', () => {
   });
 
   it('deleting the last board creates a fresh one', async () => {
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'saved' });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
     vi.mocked(api.deleteBoard).mockResolvedValue(undefined);
     vi.mocked(api.listBoards).mockResolvedValue([]);
     vi.mocked(api.createBoard).mockResolvedValue(board('fresh2', { version: 1 }));
@@ -314,7 +331,7 @@ describe('createBoard and deleteBoard', () => {
   });
 
   it('a 404 on delete counts as already deleted', async () => {
-    resetState({ board: { id: 'cur', name: 'Cur', version: 1 }, saveStatus: 'saved' });
+    resetState({ board: { id: 'cur', name: 'Cur', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
     vi.mocked(api.deleteBoard).mockRejectedValue(new ApiError(404, { detail: 'Board not found' }));
     await deleteBoard('other1');
     expect(clearBackup).toHaveBeenCalledWith('other1');
@@ -322,11 +339,11 @@ describe('createBoard and deleteBoard', () => {
 });
 
 describe('renameBoard', () => {
-  beforeEach(() => resetState({ board: { id: 'b1', name: 'Old', version: 1 }, saveStatus: 'saved' }));
+  beforeEach(() => resetState({ board: { id: 'b1', name: 'Old', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' }));
 
   it('trims and applies the new name', () => {
     renameBoard('  New name  ');
-    expect(getState().board).toEqual({ id: 'b1', name: 'New name', version: 1 });
+    expect(getState().board).toEqual({ id: 'b1', name: 'New name', version: 1, notebook: 'NB', section: 'Sec' });
   });
 
   it('ignores blank and unchanged names', () => {
@@ -350,19 +367,19 @@ describe('renameBoard', () => {
 });
 
 describe('resolveConflict', () => {
-  beforeEach(() => resetState({ board: { id: 'b1', name: 'Mine', version: 1 }, saveStatus: 'conflict', elements: [el('mine')] }));
+  beforeEach(() => resetState({ board: { id: 'b1', name: 'Mine', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'conflict', elements: [el('mine')] }));
 
   it('reload discards local changes and loads the server copy', async () => {
     vi.mocked(api.getBoard).mockResolvedValue(board('b1', { name: 'Theirs', version: 9 }));
     await resolveConflict('reload');
     expect(clearBackup).toHaveBeenCalledWith('b1');
-    expect(getState().board).toEqual({ id: 'b1', name: 'Theirs', version: 9 });
+    expect(getState().board).toEqual({ id: 'b1', name: 'Theirs', version: 9, notebook: 'NB', section: 'Sec' });
     expect(getState().elements).toEqual([]);
     expect(getState().saveStatus).toBe('saved');
   });
 
   it('overwrite saves without a baseVersion', async () => {
-    vi.mocked(api.updateBoard).mockResolvedValue({ id: 'b1', name: 'Mine', version: 10, updatedAt: 'x' });
+    vi.mocked(api.updateBoard).mockResolvedValue({ id: 'b1', name: 'Mine', version: 10, updatedAt: 'x', notebook: 'NB', section: 'Sec' });
     await resolveConflict('overwrite');
     const body = vi.mocked(api.updateBoard).mock.calls[0]![1];
     expect('baseVersion' in body).toBe(false);

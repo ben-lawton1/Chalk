@@ -13,6 +13,7 @@ export function initialState(): AppState {
     tool: 'select', toolLocked: false, currentStyle: { ...DEFAULT_STYLE }, editing: null,
     interaction: { marquee: null, bindTarget: null, hoverId: null, cursor: null, gestureActive: false, dropPreview: null },
     board: null, saveStatus: 'loading', canUndo: false, canRedo: false, dialog: 'none', toast: null,
+    library: null, sidebarOpen: true,
   };
 }
 

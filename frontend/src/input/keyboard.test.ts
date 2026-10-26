@@ -181,6 +181,13 @@ describe('shifted keys', () => {
     expect(actions.zoomToSelection).toHaveBeenCalledTimes(1);
     expect(actions.setTool).not.toHaveBeenCalled();
   });
+  it('Ctrl+Backslash toggles the sidebar', () => {
+    expect(handleKeyDown(ctrl('\\', { code: 'Backslash' }))).toBe(true);
+    expect(actions.toggleSidebar).toHaveBeenCalledTimes(1);
+    expect(handleKeyDown(key('\\', { code: 'Backslash' }))).toBe(false);
+    expect(actions.toggleSidebar).toHaveBeenCalledTimes(1);
+  });
+
   it('Home goes back to the page corner, but not with Shift or Alt', () => {
     expect(handleKeyDown(key('Home'))).toBe(true);
     expect(actions.goHome).toHaveBeenCalledTimes(1);

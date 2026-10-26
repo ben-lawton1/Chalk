@@ -1,15 +1,15 @@
 /**
  * Chalk shared contract types.
  *
- * FROZEN after WP0. Only the integration package (WP6) may edit this file.
+ * Frozen after v1's WP0; v2 (notebooks, sidebar, page canvas) may edit it.
  * This file imports nothing and contains no runtime code (types only).
  *
  * Conventions:
  * - Every 2D value is a {x, y} object (never a tuple), except Binding.fixedPoint,
  *   which is a [fx, fy] ratio pair.
  * - World units: the infinite canvas coordinate space elements live in.
- * - Screen units: CSS px relative to the canvas top-left. Because the canvas
- *   container is `position: fixed; inset: 0`, screen == clientX/clientY.
+ * - Screen units: CSS px relative to the canvas top-left. With the sidebar open the canvas sits at
+ *   `left: var(--sidebar-w)`, so client = screen + the canvas rect origin (the test hook adds it).
  * - screen = (world + scroll) * zoom ; world = screen / zoom - scroll.
  * - Elements are immutable: every change creates a new object (render caches
  *   are keyed by object identity).
@@ -244,6 +244,9 @@ export type SaveStatus = 'loading' | 'saved' | 'dirty' | 'saving' | 'error' | 'c
 export interface BoardMeta {
   id: string;
   name: string;
+  /** Folder names as the server returned them (empty until known). */
+  notebook: string;
+  section: string;
   /** Server version this client last saw (sent as baseVersion). */
   version: number;
 }
@@ -254,7 +257,7 @@ export interface ToastState {
   kind: 'info' | 'error';
 }
 
-export type DialogId = 'none' | 'boards' | 'help';
+export type DialogId = 'none' | 'help';
 
 export interface AppState {
   /** Z-order = array order (last = top). */
@@ -275,6 +278,9 @@ export interface AppState {
   saveStatus: SaveStatus;
   canUndo: boolean;
   canRedo: boolean;
+  /** Notebook tree from GET /library; null until the first load. */
+  library: LibraryTree | null;
+  sidebarOpen: boolean;
   dialog: DialogId;
   toast: ToastState | null;
 }
@@ -352,6 +358,8 @@ export interface BoardSummary {
   version: number;
   /** ISO-8601 UTC with milliseconds and 'Z'. */
   updatedAt: string;
+  notebook: string;
+  section: string;
 }
 
 export interface Board extends BoardSummary {
@@ -363,6 +371,30 @@ export interface Board extends BoardSummary {
 export interface BoardCreateRequest {
   name?: string;
   scene?: SceneFile;
+  /** Both or neither. */
+  notebook?: string;
+  section?: string;
+}
+
+export interface SectionNode {
+  name: string;
+  pages: BoardSummary[];
+}
+
+export interface NotebookNode {
+  name: string;
+  sections: SectionNode[];
+}
+
+export interface LibraryTree {
+  /** Display label of the library folder. */
+  path: string;
+  notebooks: NotebookNode[];
+}
+
+/** Response of notebook/section create and rename: the final (sanitised, de-duplicated) name. */
+export interface FolderInfo {
+  name: string;
 }
 
 /** baseVersion: integer = checked write (409 on mismatch); omitted or null = forced overwrite. */
@@ -423,8 +455,9 @@ export interface ChalkTestHook {
   getElements(): ChalkElement[];
   getSelectedIds(): string[];
   getAppState(): ChalkTestAppState;
-  /** World -> client px (the canvas is fixed at 0,0, so screen == client). */
+  /** World -> client px (includes the canvas offset, i.e. the open sidebar). */
   worldToScreen(p: Point): Point;
+  /** Takes client px. */
   screenToWorld(p: Point): Point;
   /** Bounds of an element in client px, or null if missing. */
   getElementScreenBounds(id: string): Rect | null;

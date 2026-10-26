@@ -10,6 +10,7 @@ import { attachKeyboard } from './input/keyboard';
 import { attachClipboard } from './input/clipboard';
 import { startAutosave } from './persistence/autosave';
 import { initBoards } from './persistence/boards';
+import { initSidebarPrefs, startLibrarySync } from './persistence/library';
 import { App } from './ui/App';
 
 function attempt(name: string, fn: () => unknown): void {
@@ -33,11 +34,13 @@ async function boot(): Promise<void> {
     attempt('remeasureText', remeasureText);
   });
   // 2. test hook, 3. React (rendered directly, without a dev double-mount wrapper), 4. input + persistence
+  attempt('initSidebarPrefs', initSidebarPrefs);
   attempt('installTestHook', installTestHook);
   createRoot(document.getElementById('root')!).render(<App />);
   attempt('attachKeyboard', attachKeyboard);
   attempt('attachClipboard', attachClipboard);
   attempt('startAutosave', startAutosave);
+  attempt('startLibrarySync', startLibrarySync);
   attempt('initBoards', initBoards);
 }
 

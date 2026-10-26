@@ -29,7 +29,7 @@ vi.mock('../core/serialize');
 vi.mock('./backup');
 
 const el = (id: string): ChalkElement => ({ id }) as unknown as ChalkElement;
-const summary = (version: number): BoardSummary => ({ id: 'b1', name: 'N', version, updatedAt: 'x' });
+const summary = (version: number): BoardSummary => ({ id: 'b1', name: 'N', version, updatedAt: 'x', notebook: 'NB', section: 'Sec' });
 const conflict = (): ApiError => new ApiError(409, { detail: { message: 'Version conflict', currentVersion: 9 } });
 
 let detach: () => void;
@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 2, elements: [...els] }));
   resetAutosaveForTests();
-  resetState({ board: { id: 'b1', name: 'N', version: 1 }, saveStatus: 'saved' });
+  resetState({ board: { id: 'b1', name: 'N', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
   clearHistory();
   markClean();
   detach = startAutosave();
@@ -173,10 +173,10 @@ describe('single flight', () => {
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
     const other = [el('x')];
     markClean(other, 'Other');
-    setState({ board: { id: 'b2', name: 'Other', version: 5 }, elements: other, saveStatus: 'saved' });
+    setState({ board: { id: 'b2', name: 'Other', version: 5, notebook: 'NB', section: 'Sec' }, elements: other, saveStatus: 'saved' });
     first.resolve(summary(2));
     await vi.advanceTimersByTimeAsync(0);
-    expect(getState().board).toEqual({ id: 'b2', name: 'Other', version: 5 });
+    expect(getState().board).toEqual({ id: 'b2', name: 'Other', version: 5, notebook: 'NB', section: 'Sec' });
     expect(getState().saveStatus).toBe('saved');
     expect(isDirty()).toBe(false);
   });
@@ -419,5 +419,32 @@ describe('leaving the page', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('server-changed names', () => {
+  it('adopts a collision-suffixed name without scheduling another save', async () => {
+    vi.mocked(api.updateBoard).mockResolvedValue({ ...summary(2), name: 'Plan (2)' });
+    setState((s) => ({ board: s.board && { ...s.board, name: 'Plan' } }));
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(api.updateBoard).toHaveBeenCalledTimes(1);
+    expect(getState().board?.name).toBe('Plan (2)');
+    expect(getState().saveStatus).toBe('saved');
+    expect(isDirty()).toBe(false);
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS * 3);
+    expect(api.updateBoard).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps what the user typed meanwhile and saves it next', async () => {
+    const first = deferred<BoardSummary>();
+    vi.mocked(api.updateBoard).mockReturnValueOnce(first.promise).mockResolvedValue({ ...summary(3), name: 'Third' });
+    setState((s) => ({ board: s.board && { ...s.board, name: 'Plan' } }));
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    setState((s) => ({ board: s.board && { ...s.board, name: 'Third' } }));
+    first.resolve({ ...summary(2), name: 'Plan (2)' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().board?.name).toBe('Third');
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(vi.mocked(api.updateBoard).mock.calls[1]![1].name).toBe('Third');
   });
 });
