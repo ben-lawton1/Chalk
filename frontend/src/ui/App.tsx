@@ -5,6 +5,7 @@ import { Canvas } from './Canvas';
 import { HelpDialog } from './HelpDialog';
 import { Hints } from './Hints';
 import { Icon } from './icons';
+import { NotesLayer } from './notes/NotesLayer';
 import { PenTray } from './PenTray';
 import { Sidebar } from './Sidebar';
 import { StylePanel } from './StylePanel';
@@ -23,6 +24,7 @@ export function App() {
       {/* The stage is everything right of the sidebar: canvas and text editor share its coordinate space. */}
       <div className="stage">
         <Canvas />
+        <NotesLayer />
         <TextEditor />
       </div>
       <TopBar />

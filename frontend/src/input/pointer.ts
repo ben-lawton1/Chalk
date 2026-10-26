@@ -11,7 +11,7 @@ import { lassoTool } from '../tools/lasso';
 import { penTool } from '../tools/pen';
 import { isOverSelection, selectTool } from '../tools/select';
 import { getState, setInteraction, setLastPointerWorld, setSelection, setViewport, subscribe } from '../state/store';
-import { commitEditing } from '../state/actions';
+import { commitEditing, leaveNotesMode } from '../state/actions';
 import { classifyPen, ERASER_CURSOR } from './penButtons';
 import { createTapTracker } from './taps';
 import { touchGestures } from './touch';
@@ -177,6 +177,8 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
   const onContextMenu = (e: MouseEvent): void => e.preventDefault();
 
   const onPointerDown = (e: PointerEvent): void => {
+    // 0a. A press on the canvas (that is, outside the notes column, which sits above it) ends notes mode; the press then proceeds.
+    if (getState().notesActive) leaveNotesMode();
     // 0. Blur whatever else has focus (the mousedown preventDefault would leave it focused).
     const ae = document.activeElement;
     if (ae instanceof HTMLElement && ae !== document.body && ae.getAttribute('data-testid') !== 'text-editor') ae.blur();

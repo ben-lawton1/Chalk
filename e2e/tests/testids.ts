@@ -15,6 +15,13 @@ export const TID = {
   // Toolbar (tool buttons use tidTool)
   toolLock: 'tool-lock',
   dragGhost: 'drag-ghost',
+  toolNotes: 'tool-notes',
+
+  // Page notes (v4)
+  notesLayer: 'notes-layer',
+  notesColumn: 'notes-column',
+  notesEditor: 'notes-editor',
+  notesLinkInput: 'notes-link-input',
 
   // Style panel (swatches and options use the tid* helpers below)
   stylePanel: 'style-panel',

@@ -7,6 +7,8 @@ import { fitToBounds, screenToWorld, viewportCenter, zoomAt } from '../core/view
 import { getCommonBounds } from '../core/geometry';
 import { unionRects } from '../core/math';
 import { isNotesEmpty } from '../core/notes';
+import { inNotesColumn } from '../core/notesView';
+import { getNotesHost } from './notesHost';
 import { updateBoundArrows } from '../core/binding';
 import {
   addElements, applyStyleToElements, cloneWithNewIds, createShape, createText, duplicateElements, fitShapeToLabel,
@@ -27,6 +29,7 @@ let clipboardBuffer: string | null = null;
 
 export function setTool(tool: ToolId): void {
   commitEditing();
+  leaveNotesMode(); // choosing a tool ends notes mode
   // The pen tray belongs to the pen, eraser and lasso; any other tool closes it.
   setState(tool === 'pen' || tool === 'eraser' || tool === 'lasso' ? { tool } : { tool, penTrayOpen: false });
   // Written inline: state/* may not import tools/* (§4.2). Drawing tools = everything but select, hand and the ink tools
@@ -385,6 +388,33 @@ export function setNotes(notes: NotesDoc | null): void {
 
 export function setNotesActive(on: boolean): void {
   setState({ notesActive: on });
+}
+
+/**
+ * Enters notes mode: finishes any text editing, turns the ink tools off (the pen must always ink), then focuses the editor with the
+ * caret at `world` (a double-click) or at the remembered caret. A no-op focus when no editor is mounted yet.
+ */
+export function enterNotesMode(world: Point | null = null): void {
+  commitEditing();
+  const s = getState();
+  if (s.tool === 'pen' || s.tool === 'eraser' || s.tool === 'lasso') setState({ tool: 'select', penTrayOpen: false });
+  setNotesActive(true);
+  getNotesHost()?.focusAt(world);
+}
+
+/** Leaves notes mode (saves the caret and blurs the editor). No-op when it is already off. */
+export function leaveNotesMode(): void {
+  if (!getState().notesActive) return;
+  getNotesHost()?.blur();
+  setNotesActive(false);
+}
+
+/** The double-click / double-tap entry: when `world` is inside the notes column, enters notes mode there and returns true. */
+export function enterNotesIfInColumn(world: Point): boolean {
+  const s = getState();
+  if (!inNotesColumn(world, s.notesBounds, !isNotesEmpty(s.notes))) return false;
+  enterNotesMode(world);
+  return true;
 }
 
 /** The measured world rect of the rendered notes column (null when not measured). */

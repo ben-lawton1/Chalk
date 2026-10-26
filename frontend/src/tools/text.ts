@@ -2,7 +2,7 @@
 import type { Tool } from '../types';
 import { hitTest } from '../core/geometry';
 import { getState, setInteraction } from '../state/store';
-import { createTextAt, startEditing } from '../state/actions';
+import { createTextAt, enterNotesIfInColumn, startEditing } from '../state/actions';
 
 let active = false;
 
@@ -24,6 +24,12 @@ export const textTool: Tool = {
 
   onPointerUp() {
     active = false;
+  },
+
+  /** A double-click inside the notes column enters notes mode (the first click already made, then dropped, an empty text). */
+  onDoubleClick(p) {
+    const s = getState();
+    if (!hitTest(s.elements, p.world, s.viewport.zoom)) enterNotesIfInColumn(p.world);
   },
 
   onCancel() {

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { PALETTE_DRAG_THRESHOLD_PX } from '../constants';
 import { SHAPES, isShapeKind } from '../core/shapes';
 import { screenToWorld } from '../core/viewport';
-import { placeShape, setPenTrayOpen, setTool, toggleToolLock } from '../state/actions';
+import { enterNotesMode, leaveNotesMode, placeShape, setPenTrayOpen, setTool, toggleToolLock } from '../state/actions';
 import { getState, setInteraction } from '../state/store';
 import { TOOLBAR, TOOL_INFO } from '../tools/index';
 import { TID, tidTool } from '../testids';
@@ -45,6 +45,7 @@ function canvasScreenPoint(clientX: number, clientY: number): Point | null {
 export function Toolbar() {
   const tool = useAppState((s) => s.tool);
   const toolLocked = useAppState((s) => s.toolLocked);
+  const notesActive = useAppState((s) => s.notesActive);
   const penColor = useAppState((s) => s.pens[s.activePen]?.color ?? '#e9ecef');
   const [ghost, setGhost] = useState<{ x: number; y: number; kind: ShapeKind } | null>(null);
   const record = useRef<DragRecord | null>(null);
@@ -192,6 +193,21 @@ export function Toolbar() {
                 {id === 'pen' && <span className="pen-dot" style={{ background: penColor }} />}
                 {hint && <span className="tool-hint">{hint}</span>}
               </button>
+              {id === 'text' && (
+                <button
+                  type="button"
+                  className="tool-btn"
+                  data-testid={TID.toolNotes}
+                  aria-pressed={notesActive}
+                  aria-label="Notes"
+                  title="Notes — N"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => (notesActive ? leaveNotesMode() : enterNotesMode())}
+                >
+                  <Icon name="notes" size={24} />
+                  <span className="tool-hint">N</span>
+                </button>
+              )}
             </Fragment>
           );
         })}

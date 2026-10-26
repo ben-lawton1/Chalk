@@ -14,7 +14,7 @@ import {
 } from '../core/scene';
 import { getState, setElements, setInteraction, setSelection } from '../state/store';
 import { pushUndo, takeSnapshot } from '../state/history';
-import { createTextAt, startEditing } from '../state/actions';
+import { createTextAt, enterNotesIfInColumn, startEditing } from '../state/actions';
 
 type Gesture =
   | { kind: 'pending'; downScreen: Point; downWorld: Point; before: Snapshot; base: readonly ChalkElement[]; ids: string[]; collapseTo: string | null; toggleOff: string | null }
@@ -285,7 +285,7 @@ export const selectTool: Tool = {
     const s = getState();
     const hit = hitTest(s.elements, p.world, s.viewport.zoom);
     if (hit) startEditing(hit.element.id);
-    else createTextAt(p.world);
+    else if (!enterNotesIfInColumn(p.world)) createTextAt(p.world);
   },
 
   onCancel() {

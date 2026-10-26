@@ -249,3 +249,7 @@ export const NOTES_MAX_TEXT_LENGTH = 2_000_000;
 /** The /table prompt clamps to these. */
 export const TABLE_MAX_ROWS = 50;
 export const TABLE_MAX_COLS = 12;
+/** A double-click this far (world px) below the last notes block, inside the column width, still enters notes mode. */
+export const NOTES_BELOW_SLACK = 400;
+/** Screen px kept between the caret line and the stage edge before the view pans to the caret. */
+export const NOTES_CARET_MARGIN_PX = 40;
