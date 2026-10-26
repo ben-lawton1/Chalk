@@ -1,0 +1,30 @@
+name: chalk-tools
+# Build and test the host terminal bridge (Go). Nothing here runs on the host.
+x-bridge: &bridge
+  image: chalk-bridge-tools:${CHALK_TEST_TAG:-local}
+  build:
+    context: ./bridge
+    target: tools
+  volumes:
+    - ./bridge:/bridge
+    - bridge-gocache:/root/.cache/go-build
+    - bridge-gomod:/go/pkg/mod
+services:
+  bridge-build:                     # -> bridge/dist/chalk-terminal.exe (Windows) and bridge/dist/chalk-terminal (Linux)
+    <<: *bridge
+    environment:
+      CHALK_BRIDGE_VERSION: ${CHALK_BRIDGE_VERSION:-0.1.0}
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$CHALK_BRIDGE_VERSION" -o dist/chalk-terminal.exe .
+        GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$CHALK_BRIDGE_VERSION" -o dist/chalk-terminal .
+        ls -l dist
+  bridge-unit:
+    <<: *bridge
+    command: ["sh", "-c", "go vet ./... && GOOS=windows go vet ./... && go test ./..."]
+volumes:
+  bridge-gocache:
+  bridge-gomod:
