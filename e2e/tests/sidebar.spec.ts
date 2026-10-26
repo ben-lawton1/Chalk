@@ -79,8 +79,11 @@ test('SB-1: create a notebook, a section and a page through the UI', async ({ pa
     })
     .toBe(`${nb}/Alpha`);
 
+  const sectionPageId = (await app(page)).boardId;
   await hoverAndClick(page, tidSection(nb, 'Alpha'), tidRowAdd(`sec:${nb}/Alpha`));
-  const newId = await page.evaluate(() => (window as any).__CHALK__.getAppState().boardId);
+  // The new page opens asynchronously; wait for it before reading its id.
+  await expect.poll(async () => (await app(page)).boardId).not.toBe(sectionPageId);
+  const newId = (await app(page)).boardId;
   await expect(renameInput(page)).toBeFocused();
   await renameInput(page).fill('Page One');
   await renameInput(page).press('Enter');
