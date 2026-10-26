@@ -4,7 +4,7 @@ import { NUDGE, NUDGE_SHIFT } from '../constants';
 import { toolForKey } from '../tools';
 import { getState, notify } from '../state/store';
 import {
-  clearSelection, closeDialog, deleteSelection, duplicateSelection, editSelection, nudgeSelection, openDialog, redo,
+  clearSelection, closeDialog, deleteSelection, duplicateSelection, editSelection, goHome, nudgeSelection, openDialog, redo,
   reorderSelection, resetZoom, selectAll, setTool, toggleToolLock, undo, zoomIn, zoomOut, zoomToFit, zoomToSelection,
 } from '../state/actions';
 import { flushSave } from '../persistence/autosave';
@@ -127,6 +127,12 @@ export function handleKeyDown(e: KeyLike): boolean {
     }
   }
 
+  // 6b. Home returns to the page's top-left corner.
+  if (e.key === 'Home' && !e.shiftKey && !e.altKey) {
+    goHome();
+    return true;
+  }
+
   // 7. Arrow keys.
   if (!e.shiftKey && !e.altKey) {
     const d = ARROW_DELTAS[e.key];
@@ -224,6 +230,7 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'Ctrl + wheel, pinch', description: 'Zoom at the cursor', group: 'View' },
   { keys: 'Ctrl + = / Ctrl + −', description: 'Zoom in / out', group: 'View' },
   { keys: 'Ctrl + 0', description: 'Zoom to 100%', group: 'View' },
+  { keys: 'Home', description: 'Back to the top-left of the page', group: 'View' },
   { keys: 'Shift + 1', description: 'Zoom to fit everything', group: 'View' },
   { keys: 'Shift + 2', description: 'Zoom to selection', group: 'View' },
   { keys: 'Ctrl + S', description: 'Save now', group: 'File' },

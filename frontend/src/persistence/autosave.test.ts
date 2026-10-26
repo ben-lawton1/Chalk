@@ -47,7 +47,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: 
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 1, elements: [...els] }));
+  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 2, elements: [...els] }));
   resetAutosaveForTests();
   resetState({ board: { id: 'b1', name: 'N', version: 1 }, saveStatus: 'saved' });
   clearHistory();
@@ -187,7 +187,7 @@ describe('conflicts', () => {
     vi.mocked(api.updateBoard).mockRejectedValue(conflict());
     vi.mocked(api.getBoard).mockResolvedValue({
       id: 'b1', name: 'N', version: 9, updatedAt: 'x', createdAt: 'x',
-      scene: { type: 'chalk/scene', version: 1, elements: [el('other')] },
+      scene: { type: 'chalk/scene', version: 2, elements: [el('other')] },
     } as Board);
     setState({ elements: [el('a')] });
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
@@ -214,7 +214,7 @@ describe('conflicts', () => {
     const sent = [el('a')];
     vi.mocked(api.getBoard).mockResolvedValue({
       id: 'b1', name: 'N', version: 9, updatedAt: 'x', createdAt: 'x',
-      scene: { type: 'chalk/scene', version: 1, elements: [{ id: 'a' } as unknown as ChalkElement] },
+      scene: { type: 'chalk/scene', version: 2, elements: [{ id: 'a' } as unknown as ChalkElement] },
     } as Board);
     setState({ elements: sent });
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
@@ -229,7 +229,7 @@ describe('conflicts', () => {
     vi.mocked(api.updateBoard).mockRejectedValue(conflict());
     vi.mocked(api.getBoard).mockResolvedValue({
       id: 'b1', name: 'Server name', version: 9, updatedAt: 'x', createdAt: 'x',
-      scene: { type: 'chalk/scene', version: 1, elements: [{ id: 'a' } as unknown as ChalkElement] },
+      scene: { type: 'chalk/scene', version: 2, elements: [{ id: 'a' } as unknown as ChalkElement] },
     } as Board);
     setState({ elements: [el('a')] });
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);

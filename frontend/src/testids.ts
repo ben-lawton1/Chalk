@@ -35,6 +35,7 @@ export const TID = {
   zoomReset: 'zoom-reset',
   zoomIn: 'zoom-in',
   zoomFit: 'zoom-fit',
+  zoomHome: 'zoom-home',
   undo: 'undo',
   redo: 'redo',
   scrollToContent: 'scroll-to-content',

@@ -1,7 +1,7 @@
 // Unit tests for core/viewport (WP0).
 import { describe, expect, it } from 'vitest';
-import { clampZoom, fitToBounds, panBy, screenToWorld, viewportCenter, visibleWorldRect, worldToScreen, zoomAt } from './viewport';
-import { MAX_ZOOM, MIN_ZOOM } from '../constants';
+import { clampViewport, clampZoom, fitToBounds, pageOrigin, panBy, screenToWorld, viewportCenter, visibleWorldRect, worldToScreen, zoomAt } from './viewport';
+import { MAX_ZOOM, MIN_ZOOM, PAGE_MARGIN } from '../constants';
 
 const v = { scrollX: 37, scrollY: -120, zoom: 1.7 };
 
@@ -87,5 +87,34 @@ describe('visibleWorldRect and viewportCenter', () => {
   it('derives the visible rect', () => {
     expect(visibleWorldRect({ scrollX: -10, scrollY: -20, zoom: 2 }, { width: 200, height: 100 })).toEqual({ x: 10, y: 20, width: 100, height: 50 });
     expect(viewportCenter({ width: 200, height: 100 })).toEqual({ x: 100, y: 50 });
+  });
+});
+
+describe('pageOrigin and clampViewport', () => {
+  it('the origin is (0, 0) with no content or content inside the page', () => {
+    expect(pageOrigin(null)).toEqual({ x: 0, y: 0 });
+    expect(pageOrigin({ x: 100, y: 50, width: 10, height: 10 })).toEqual({ x: 0, y: 0 });
+    expect(pageOrigin({ x: PAGE_MARGIN, y: PAGE_MARGIN, width: 10, height: 10 })).toEqual({ x: 0, y: 0 });
+  });
+  it('the origin moves up/left to keep negative content reachable, with a margin', () => {
+    expect(pageOrigin({ x: -200, y: 10, width: 10, height: 10 })).toEqual({ x: -200 - PAGE_MARGIN, y: 10 - PAGE_MARGIN });
+    expect(pageOrigin({ x: 60, y: -70, width: 10, height: 10 })).toEqual({ x: 0, y: -70 - PAGE_MARGIN });
+  });
+  it('non-finite bounds fall back to 0', () => {
+    expect(pageOrigin({ x: NaN, y: Infinity, width: 1, height: 1 })).toEqual({ x: 0, y: 0 });
+  });
+  it('clamps so nothing above/left of the origin is visible', () => {
+    expect(clampViewport({ scrollX: 40, scrollY: 12, zoom: 2 }, { x: 0, y: 0 })).toEqual({ scrollX: 0, scrollY: 0, zoom: 2 });
+    expect(clampViewport({ scrollX: -40, scrollY: 12, zoom: 2 }, { x: 0, y: 0 })).toEqual({ scrollX: -40, scrollY: 0, zoom: 2 });
+    expect(clampViewport({ scrollX: 300, scrollY: 0, zoom: 1 }, { x: -100, y: -50 })).toEqual({ scrollX: 100, scrollY: 0, zoom: 1 });
+  });
+  it('returns the same object when nothing changes', () => {
+    const view = { scrollX: -10, scrollY: -10, zoom: 1 };
+    expect(clampViewport(view, { x: 0, y: 0 })).toBe(view);
+    expect(clampViewport(view, { x: -50, y: -50 })).toBe(view);
+  });
+  it('zooming out near the origin keeps the origin pinned top-left', () => {
+    const z = clampViewport(zoomAt({ scrollX: 0, scrollY: 0, zoom: 1 }, 0.5, { x: 400, y: 300 }), { x: 0, y: 0 });
+    expect(z).toEqual({ scrollX: 0, scrollY: 0, zoom: 0.5 });
   });
 });

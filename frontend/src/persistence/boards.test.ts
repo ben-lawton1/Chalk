@@ -3,13 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BOARD_LOAD_RETRIES,
   BOARD_LOAD_RETRY_MS,
-  LOAD_FIT_MAX_ZOOM,
   MAX_BOARD_NAME_LENGTH,
   VIEWPORT_SAVE_DEBOUNCE_MS,
   VIEWPORT_STORAGE_PREFIX,
 } from '../constants';
 import { parseSceneFile, toSceneFile } from '../core/serialize';
-import { zoomToFit } from '../state/actions';
 import { clearHistory } from '../state/history';
 import { getState, resetState, setState } from '../state/store';
 import type { Board, BoardSummary, ChalkElement, SceneFile } from '../types';
@@ -43,7 +41,7 @@ vi.mock('../state/actions');
 vi.mock('./backup');
 
 const el = (id: string): ChalkElement => ({ id }) as unknown as ChalkElement;
-const scene: SceneFile = { type: 'chalk/scene', version: 1, elements: [] };
+const scene: SceneFile = { type: 'chalk/scene', version: 2, elements: [] };
 const board = (id: string, over: Partial<Board> = {}): Board => ({
   id, name: 'Board ' + id, version: 3, updatedAt: 'x', createdAt: 'x', scene, ...over,
 });
@@ -70,7 +68,7 @@ beforeEach(() => {
   resetState();
   clearHistory();
   vi.mocked(parseSceneFile).mockReturnValue([]);
-  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 1, elements: [...els] }));
+  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 2, elements: [...els] }));
   vi.mocked(readBackup).mockReturnValue(null);
 });
 
@@ -88,7 +86,7 @@ describe('initBoards', () => {
     expect(api.createBoard).not.toHaveBeenCalled();
     expect(getState().board).toEqual({ id: 'first1', name: 'Board first1', version: 3 });
     expect(getState().saveStatus).toBe('saved');
-    expect(zoomToFit).toHaveBeenCalledWith({ maxZoom: LOAD_FIT_MAX_ZOOM });
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
   });
 
   it('creates a default board when there are none', async () => {
@@ -146,7 +144,7 @@ describe('initBoards', () => {
 describe('openBoard and backups', () => {
   const backupFor = (baseVersion: number): BoardBackup => ({
     boardId: 'b1', baseVersion, savedAt: 'x', name: 'Board b1',
-    scene: { type: 'chalk/scene', version: 1, elements: [el('mine')] },
+    scene: { type: 'chalk/scene', version: 2, elements: [el('mine')] },
   });
 
   it('restores a backup whose baseVersion matches and autosave sees it as dirty', async () => {
@@ -195,11 +193,27 @@ describe('openBoard and backups', () => {
     expect(getState().interaction.hoverId).toBeNull();
   });
 
-  it('uses the remembered viewport instead of fitting', () => {
+  it('opens at the identity viewport (100% at the home corner) when nothing is remembered', () => {
+    resetState({ viewport: { scrollX: -500, scrollY: -300, zoom: 3 } });
+    loadIntoState(board('b9'));
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+  });
+
+  it('uses the remembered viewport', () => {
+    stubWindow('', { [VIEWPORT_STORAGE_PREFIX + 'b9']: JSON.stringify({ scrollX: -10, scrollY: -20, zoom: 2 }) });
+    loadIntoState(board('b9'));
+    expect(getState().viewport).toEqual({ scrollX: -10, scrollY: -20, zoom: 2 });
+  });
+
+  it('clamps a remembered viewport that points above/left of the page', () => {
     stubWindow('', { [VIEWPORT_STORAGE_PREFIX + 'b9']: JSON.stringify({ scrollX: 10, scrollY: -20, zoom: 2 }) });
     loadIntoState(board('b9'));
-    expect(getState().viewport).toEqual({ scrollX: 10, scrollY: -20, zoom: 2 });
-    expect(zoomToFit).not.toHaveBeenCalled();
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: -20, zoom: 2 });
+  });
+
+  it('a v1 scene is loaded migrated and left dirty so autosave writes the v2 file back', () => {
+    loadIntoState(board('b9', { scene: { type: 'chalk/scene', version: 1 as unknown as 2, elements: [] } }));
+    expect(isDirty()).toBe(true);
   });
 
   it.each([
@@ -207,10 +221,10 @@ describe('openBoard and backups', () => {
     ['out of range zoom', JSON.stringify({ scrollX: 0, scrollY: 0, zoom: 99 })],
     ['missing field', JSON.stringify({ scrollX: 0, zoom: 1 })],
     ['non-finite', JSON.stringify({ scrollX: null, scrollY: 0, zoom: 1 })],
-  ])('falls back to zoomToFit for a bad remembered viewport (%s)', (_name, raw) => {
+  ])('falls back to the identity viewport for a bad remembered viewport (%s)', (_name, raw) => {
     stubWindow('', { [VIEWPORT_STORAGE_PREFIX + 'b9']: raw });
     loadIntoState(board('b9'));
-    expect(zoomToFit).toHaveBeenCalledWith({ maxZoom: LOAD_FIT_MAX_ZOOM });
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
   });
 
   it('a failed open keeps the previous status and rethrows', async () => {

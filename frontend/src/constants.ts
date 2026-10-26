@@ -1,7 +1,7 @@
 /**
  * Chalk shared constants.
  *
- * FROZEN after WP0. Only the integration package (WP6) may edit this file.
+ * Was FROZEN during v1's parallel build; v2 may edit it freely.
  * May import types only (from ./types). No runtime logic.
  * Units: *_PX constants are SCREEN px (divide by zoom for world units);
  * everything else is world units, milliseconds or a plain number.
@@ -22,7 +22,7 @@ import type {
 export const APP_NAME = 'Chalk';
 export const APP_VERSION = '0.1.0';
 export const SCENE_FILE_TYPE = 'chalk/scene' as const;
-export const SCENE_FILE_VERSION = 1 as const;
+export const SCENE_FILE_VERSION = 2 as const;
 
 // ---------------------------------------------------------------------------
 // Viewport
@@ -40,8 +40,8 @@ export const WHEEL_LINE_PX = 16;
 export const FIT_PADDING_PX = 64;
 /** zoomToFit never zooms in further than this by default. */
 export const FIT_MAX_ZOOM = 2;
-/** Board load uses zoomToFit({ maxZoom: LOAD_FIT_MAX_ZOOM }) when no viewport is remembered. */
-export const LOAD_FIT_MAX_ZOOM = 1;
+/** World-unit gap kept between the page's top-left edge and content that sits at negative coordinates. */
+export const PAGE_MARGIN = 32;
 
 // ---------------------------------------------------------------------------
 // Text
@@ -149,13 +149,13 @@ export const MAX_CANVAS_SIDE = 16384;
 // ---------------------------------------------------------------------------
 // Colors and palettes
 // ---------------------------------------------------------------------------
-export const CANVAS_BACKGROUND = '#ffffff';
-export const GRID_COLOR = '#dcdce0';
-export const SELECTION_COLOR = '#4f7cff';
+export const CANVAS_BACKGROUND = '#16181d';
+export const GRID_COLOR = '#2a2f37';
+export const SELECTION_COLOR = '#3fb984';
 /** Index i is rendered as data-testid `style-stroke-${i}`. */
-export const STROKE_COLORS = ['#1e1e1e', '#e03131', '#2f9e44', '#1971c2', '#f08c00'] as const;
+export const STROKE_COLORS = ['#e9ecef', '#ff6b6b', '#69db7c', '#4dabf7', '#ffa94d'] as const;
 /** Index i is rendered as data-testid `style-bg-${i}`; index 0 is transparent. */
-export const BACKGROUND_COLORS = ['transparent', '#ffc9c9', '#b2f2bb', '#a5d8ff', '#ffec99'] as const;
+export const BACKGROUND_COLORS = ['transparent', '#5c2a2a', '#1f4a2c', '#1d3b57', '#5a4a17'] as const;
 export const STROKE_WIDTHS = [1, 2, 4] as const;
 export const FONT_SIZES = [16, 24, 32, 48] as const;
 export const ROUGHNESS_LEVELS = [0, 1, 2] as const;
@@ -175,7 +175,7 @@ export const FONT_STACKS: Record<FontFamily, string> = {
 
 /** Defaults for new elements and for fields missing on import. Never mutate; always spread. */
 export const DEFAULT_STYLE: Style = {
-  strokeColor: '#1e1e1e',
+  strokeColor: '#e9ecef',
   backgroundColor: 'transparent',
   fillStyle: 'hachure',
   strokeWidth: 2,

@@ -342,7 +342,7 @@ export interface ShapeDef {
 /** The one serialization format: downloads, API `scene`, clipboard payload. UI state is never included. */
 export interface SceneFile {
   type: 'chalk/scene';
-  version: 1;
+  version: 2;
   elements: ChalkElement[];
 }
 

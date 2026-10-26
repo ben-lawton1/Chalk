@@ -305,6 +305,11 @@ export function resetZoom(): void {
   zoomAbout(() => 1);
 }
 
+/** Back to the page's top-left corner at 100%. */
+export function goHome(): void {
+  setViewport({ scrollX: 0, scrollY: 0, zoom: 1 });
+}
+
 export function zoomToFit(opts?: { maxZoom?: number }): void {
   const bounds = getCommonBounds(getState().elements);
   setViewport(fitToBounds(bounds, viewSize(), { padding: FIT_PADDING_PX, maxZoom: opts?.maxZoom ?? FIT_MAX_ZOOM }));

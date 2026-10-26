@@ -1,5 +1,5 @@
 // Bottom-left island: zoom out/reset/in/fit and undo/redo. Owner: WP4.
-import { redo, resetZoom, undo, zoomIn, zoomOut, zoomToFit } from '../state/actions';
+import { goHome, redo, resetZoom, undo, zoomIn, zoomOut, zoomToFit } from '../state/actions';
 import { TID } from '../testids';
 import { useAppState } from './hooks';
 import { Icon } from './icons';
@@ -41,6 +41,7 @@ export function ZoomControls() {
       </button>
       <Btn testId={TID.zoomIn} icon="zoomIn" title="Zoom in — Ctrl + =" onClick={() => zoomIn()} />
       <Btn testId={TID.zoomFit} icon="fit" title="Zoom to fit everything — Shift + 1" onClick={() => zoomToFit()} />
+      <Btn testId={TID.zoomHome} icon="home" title="Back to the top-left of the page — Home" onClick={() => goHome()} />
       <span className="zoom-sep" aria-hidden="true" />
       <Btn testId={TID.undo} icon="undo" title="Undo — Ctrl + Z" disabled={!canUndo} onClick={() => undo()} />
       <Btn testId={TID.redo} icon="redo" title="Redo — Ctrl + Shift + Z" disabled={!canRedo} onClick={() => redo()} />

@@ -3,15 +3,14 @@ import {
   BOARD_LOAD_RETRIES,
   BOARD_LOAD_RETRY_MS,
   DEFAULT_BOARD_NAME,
-  LOAD_FIT_MAX_ZOOM,
   MAX_BOARD_NAME_LENGTH,
   MAX_ZOOM,
   MIN_ZOOM,
+  SCENE_FILE_VERSION,
   VIEWPORT_SAVE_DEBOUNCE_MS,
   VIEWPORT_STORAGE_PREFIX,
 } from '../constants';
 import { parseSceneFile } from '../core/serialize';
-import { zoomToFit } from '../state/actions';
 import { clearHistory } from '../state/history';
 import { getState, notify, setInteraction, setState, setViewport, subscribe } from '../state/store';
 import type { Board, BoardSummary, ChalkElement, Viewport } from '../types';
@@ -193,7 +192,9 @@ export function loadIntoState(board: Board, opts?: { elements?: ChalkElement[] }
     serverEls = [];
   }
   const els = opts?.elements ?? serverEls;
-  markClean(serverEls, board.name);
+  // A migrated (older-version) file is "unsaved" on purpose: a fresh array identity makes autosave write the v2 file back once.
+  const migrated = (board.scene.version as number) < SCENE_FILE_VERSION;
+  markClean(migrated && !opts?.elements ? [...serverEls] : serverEls, board.name);
   setState({
     board: { id: board.id, name: board.name, version: board.version },
     elements: els,
@@ -204,8 +205,7 @@ export function loadIntoState(board: Board, opts?: { elements?: ChalkElement[] }
   });
   clearHistory();
   const remembered = readViewport(board.id);
-  if (remembered) setViewport(remembered);
-  else zoomToFit({ maxZoom: LOAD_FIT_MAX_ZOOM });
+  setViewport(remembered ?? { scrollX: 0, scrollY: 0, zoom: 1 }); // no memory: 100% at the home corner
   setInteraction({ hoverId: null, bindTarget: null });
 }
 

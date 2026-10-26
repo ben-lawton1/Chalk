@@ -1,7 +1,7 @@
 // Unit tests for state/store (WP0).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShapeElement } from '../types';
-import { DEFAULT_STYLE, TOAST_MS } from '../constants';
+import { DEFAULT_STYLE, PAGE_MARGIN, TOAST_MS } from '../constants';
 import {
   getLastPointerWorld, getSelectedElements, getState, initialState, notify, resetState, setElements, setInteraction,
   setLastPointerWorld, setSelection, setState, setViewport, subscribe,
@@ -96,7 +96,7 @@ describe('setInteraction and setViewport', () => {
     const off = subscribe(l);
     setViewport({ scrollX: 0, scrollY: 0, zoom: 1 });
     expect(l).not.toHaveBeenCalled();
-    setViewport({ scrollX: 5, scrollY: 0, zoom: 1 });
+    setViewport({ scrollX: -5, scrollY: 0, zoom: 1 });
     expect(l).toHaveBeenCalledTimes(1);
     off();
   });
@@ -140,5 +140,35 @@ describe('resetState and the pointer position', () => {
     expect(l).not.toHaveBeenCalled();
     expect(getLastPointerWorld()).toEqual({ x: 3, y: 4 });
     off();
+  });
+});
+
+describe('setViewport page clamp', () => {
+  const rect = (id: string, x: number, y: number): ShapeElement => ({ ...shape(id), x, y });
+
+  it('cannot scroll above or left of the home corner', () => {
+    setViewport({ scrollX: 120, scrollY: 40, zoom: 2 });
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 2 });
+    setViewport({ scrollX: -50, scrollY: 40, zoom: 2 });
+    expect(getState().viewport).toEqual({ scrollX: -50, scrollY: 0, zoom: 2 });
+  });
+  it('a clamped request equal to the current viewport is a no-op', () => {
+    const l = vi.fn();
+    const off = subscribe(l);
+    setViewport({ scrollX: 80, scrollY: 80, zoom: 1 });
+    expect(l).not.toHaveBeenCalled();
+    off();
+  });
+  it('content at negative coordinates moves the limit out, with the page margin', () => {
+    setElements([rect('a', -100, -40)]);
+    setViewport({ scrollX: 500, scrollY: 500, zoom: 1 });
+    expect(getState().viewport).toEqual({ scrollX: 100 + PAGE_MARGIN, scrollY: 40 + PAGE_MARGIN, zoom: 1 });
+  });
+  it('re-reads the bounds when the elements change', () => {
+    setElements([rect('a', -100, 0)]);
+    setViewport({ scrollX: 500, scrollY: 0, zoom: 1 });
+    setElements([rect('a', 100, 100)]);
+    setViewport({ scrollX: 500, scrollY: 0, zoom: 1 });
+    expect(getState().viewport.scrollX).toBe(0);
   });
 });

@@ -4,13 +4,14 @@ import type {
 } from '../types';
 import {
   ARROWHEADS, DEFAULT_STYLE, EDGES, FILL_STYLES, FONT_FAMILIES, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE, SCENE_FILE_TYPE,
-  SCENE_FILE_VERSION, STROKE_STYLES, TEXT_ALIGNS,
+  PAGE_MARGIN, SCENE_FILE_VERSION, STROKE_STYLES, TEXT_ALIGNS,
 } from '../constants';
 import { clamp } from './math';
 import { isValidSeed, newId, newSeed } from './ids';
 import { isShapeKind } from './shapes';
 import { withMeasuredText } from './text';
-import { isBindable } from './geometry';
+import { getCommonBounds, isBindable } from './geometry';
+import { moveElements } from './scene';
 import { indexById, updateBoundArrows } from './binding';
 
 export class SceneParseError extends Error {
@@ -20,8 +21,40 @@ export class SceneParseError extends Error {
   }
 }
 
-/** n -> n + 1 migrations applied by parseSceneFile. Empty in v1. */
-export const MIGRATIONS: Record<number, (file: Record<string, unknown>) => Record<string, unknown>> = {};
+/** v1 light-theme colours -> their dark-theme equivalents (exact, lower-case match only). */
+const V1_TO_V2_COLORS: Readonly<Record<string, string>> = {
+  '#1e1e1e': '#e9ecef', '#e03131': '#ff6b6b', '#2f9e44': '#69db7c', '#1971c2': '#4dabf7', '#f08c00': '#ffa94d',
+  '#ffc9c9': '#5c2a2a', '#b2f2bb': '#1f4a2c', '#a5d8ff': '#1d3b57', '#ffec99': '#5a4a17',
+};
+
+function remapColor(c: string): string {
+  return V1_TO_V2_COLORS[c.toLowerCase()] ?? c;
+}
+
+/**
+ * v1 -> v2: remap the palette for the dark theme, and move content that sat at negative coordinates (the old infinite
+ * canvas) into the page, which now starts at its top-left (0, 0). Works on restored elements and shifts them all by the
+ * same delta through moveElements, so arrow bindings stay consistent.
+ */
+function migrateV1ToV2(file: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(file.elements)) return file;
+  let els: readonly ChalkElement[] = restoreElements(file.elements).map((el) => {
+    const { strokeColor, backgroundColor } = el.style;
+    const s = remapColor(strokeColor);
+    const b = remapColor(backgroundColor);
+    return s === strokeColor && b === backgroundColor ? el : { ...el, style: { ...el.style, strokeColor: s, backgroundColor: b } };
+  });
+  const bounds = getCommonBounds(els);
+  if (bounds && (bounds.x < 0 || bounds.y < 0)) {
+    els = moveElements(els, els.map((el) => el.id), Math.max(0, PAGE_MARGIN - bounds.x), Math.max(0, PAGE_MARGIN - bounds.y));
+  }
+  return { ...file, elements: [...els] };
+}
+
+/** n -> n + 1 migrations applied by parseSceneFile. */
+export const MIGRATIONS: Record<number, (file: Record<string, unknown>) => Record<string, unknown>> = {
+  1: migrateV1ToV2,
+};
 
 export function toSceneFile(elements: readonly ChalkElement[]): SceneFile {
   return { type: SCENE_FILE_TYPE, version: SCENE_FILE_VERSION, elements: [...elements] };

@@ -1,6 +1,8 @@
 // Single app-state store: setState, subscribe, selection/interaction helpers, toasts (WP0).
 import type { AppState, ChalkElement, Interaction, Point, ToastState, Viewport } from '../types';
 import { DEFAULT_STYLE, TOAST_MS } from '../constants';
+import { getCommonBounds } from '../core/geometry';
+import { clampViewport, pageOrigin } from '../core/viewport';
 
 export type Listener = (state: AppState, prev: AppState) => void;
 export type StatePatch = Partial<AppState> | ((s: AppState) => Partial<AppState>);
@@ -59,7 +61,19 @@ export function setSelection(ids: readonly string[]): void {
   setState({ selectedIds: unique });
 }
 
-export function setViewport(viewport: Viewport): void {
+let originFor: readonly ChalkElement[] | null = null;
+let originCache: Point = { x: 0, y: 0 };
+function currentOrigin(): Point {
+  if (originFor !== state.elements) {
+    originFor = state.elements;
+    originCache = pageOrigin(getCommonBounds(state.elements));
+  }
+  return originCache;
+}
+
+/** Every pan, zoom, fit and remembered viewport goes through the page clamp (no scrolling above/left of the page). */
+export function setViewport(requested: Viewport): void {
+  const viewport = clampViewport(requested, currentOrigin());
   const v = state.viewport;
   if (v.scrollX === viewport.scrollX && v.scrollY === viewport.scrollY && v.zoom === viewport.zoom) return;
   setState({ viewport });

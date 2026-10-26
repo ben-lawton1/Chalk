@@ -378,20 +378,21 @@ describe('select tool: arrow endpoints', () => {
 
 describe('hand tool', () => {
   it('pans by the screen delta divided by zoom and cancel restores the viewport', () => {
-    setState({ viewport: { scrollX: 10, scrollY: 20, zoom: 2 } });
+    setState({ viewport: { scrollX: -100, scrollY: -50, zoom: 2 } });
     TOOLS.hand.onPointerDown(pi(100, 100));
     TOOLS.hand.onPointerMove(pi(140, 120));
-    expect(getState().viewport).toEqual({ scrollX: 30, scrollY: 30, zoom: 2 });
+    expect(getState().viewport).toEqual({ scrollX: -80, scrollY: -40, zoom: 2 });
     TOOLS.hand.onCancel!();
-    expect(getState().viewport).toEqual({ scrollX: 10, scrollY: 20, zoom: 2 });
+    expect(getState().viewport).toEqual({ scrollX: -100, scrollY: -50, zoom: 2 });
     TOOLS.hand.onPointerMove(pi(300, 300)); // hover: nothing
-    expect(getState().viewport).toEqual({ scrollX: 10, scrollY: 20, zoom: 2 });
+    expect(getState().viewport).toEqual({ scrollX: -100, scrollY: -50, zoom: 2 });
   });
   it('the release position counts', () => {
+    setState({ viewport: { scrollX: -100, scrollY: -100, zoom: 1 } });
     TOOLS.hand.onPointerDown(pi(0, 0));
     TOOLS.hand.onPointerUp(pi(25, -10));
-    expect(getState().viewport.scrollX).toBe(25);
-    expect(getState().viewport.scrollY).toBe(-10);
+    expect(getState().viewport.scrollX).toBe(-75);
+    expect(getState().viewport.scrollY).toBe(-110);
     expect(getHistorySizes().past).toBe(0);
   });
 });
@@ -537,24 +538,24 @@ describe('pointer router', () => {
     expect(els()).toHaveLength(0); // empty text removed
   });
   it('the hand tool, the middle button and Space+drag all pan', () => {
-    setState({ tool: 'hand' });
+    setState({ tool: 'hand', viewport: { scrollX: -100, scrollY: 0, zoom: 1 } });
     ptr('pointerdown', 0, 0);
     ptr('pointermove', 30, 10);
     expect(canvas.style.cursor).toBe('grabbing');
     ptr('pointerup', 30, 10);
-    expect(getState().viewport.scrollX).toBe(30);
+    expect(getState().viewport.scrollX).toBe(-70);
     setState({ tool: 'rectangle' });
     ptr('pointerdown', 0, 0, { button: 1 });
     ptr('pointermove', 10, 0, { buttons: 4 });
     ptr('pointerup', 10, 0, { button: 1 });
-    expect(getState().viewport.scrollX).toBe(40);
+    expect(getState().viewport.scrollX).toBe(-60);
     fire(win, 'keydown', { code: 'Space', repeat: false });
     expect(pointer.isSpaceHeld()).toBe(true);
     expect(canvas.style.cursor).toBe('grab');
     ptr('pointerdown', 0, 0);
     ptr('pointermove', 5, 0);
     ptr('pointerup', 5, 0);
-    expect(getState().viewport.scrollX).toBe(45);
+    expect(getState().viewport.scrollX).toBe(-55);
     expect(shapes()).toHaveLength(0);
     fire(win, 'keyup', { code: 'Space' });
     expect(pointer.isSpaceHeld()).toBe(false);

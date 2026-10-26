@@ -181,6 +181,12 @@ describe('shifted keys', () => {
     expect(actions.zoomToSelection).toHaveBeenCalledTimes(1);
     expect(actions.setTool).not.toHaveBeenCalled();
   });
+  it('Home goes back to the page corner, but not with Shift or Alt', () => {
+    expect(handleKeyDown(key('Home'))).toBe(true);
+    expect(actions.goHome).toHaveBeenCalledTimes(1);
+    expect(handleKeyDown(key('Home', { shiftKey: true }))).toBe(false);
+    expect(actions.goHome).toHaveBeenCalledTimes(1);
+  });
   it('Shift+arrow nudges by NUDGE_SHIFT and plain arrows by NUDGE', () => {
     handleKeyDown(key('ArrowRight', { shiftKey: true }));
     handleKeyDown(key('ArrowUp'));

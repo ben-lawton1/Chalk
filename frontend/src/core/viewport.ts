@@ -1,6 +1,20 @@
 // Viewport transforms: world/screen mapping, zoom, pan and fit (WP0).
 import type { Point, Rect, Size, Viewport } from '../types';
-import { FIT_MAX_ZOOM, FIT_PADDING_PX, MAX_ZOOM, MIN_ZOOM } from '../constants';
+import { FIT_MAX_ZOOM, FIT_PADDING_PX, MAX_ZOOM, MIN_ZOOM, PAGE_MARGIN } from '../constants';
+
+/** Top-left corner of the page: (0, 0), or further up/left when content sits at negative coordinates. */
+export function pageOrigin(bounds: Rect | null): Point {
+  if (!bounds) return { x: 0, y: 0 };
+  const x = bounds.x - PAGE_MARGIN;
+  const y = bounds.y - PAGE_MARGIN;
+  return { x: Number.isFinite(x) ? Math.min(0, x) : 0, y: Number.isFinite(y) ? Math.min(0, y) : 0 };
+}
+/** You cannot scroll above or left of the page origin. Returns `v` itself when nothing changes. */
+export function clampViewport(v: Viewport, origin: Point): Viewport {
+  const scrollX = Math.min(v.scrollX, 0 - origin.x);
+  const scrollY = Math.min(v.scrollY, 0 - origin.y);
+  return scrollX === v.scrollX && scrollY === v.scrollY ? v : { ...v, scrollX, scrollY };
+}
 
 export function worldToScreen(p: Point, v: Viewport): Point {
   return { x: (p.x + v.scrollX) * v.zoom, y: (p.y + v.scrollY) * v.zoom };

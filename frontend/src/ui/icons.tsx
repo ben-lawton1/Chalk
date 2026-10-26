@@ -3,7 +3,7 @@ import type { ToolId } from '../types';
 import { SHAPES, isShapeKind } from '../core/shapes';
 
 export type IconName = 'hand' | 'select' | 'arrow' | 'line' | 'text' | 'lock' | 'unlock' | 'undo' | 'redo' | 'menu'
-  | 'help' | 'zoomIn' | 'zoomOut' | 'fit' | 'trash' | 'duplicate' | 'front' | 'back' | 'forward' | 'backward' | 'close';
+  | 'help' | 'zoomIn' | 'zoomOut' | 'fit' | 'trash' | 'duplicate' | 'front' | 'back' | 'forward' | 'backward' | 'close' | 'home';
 
 /** SVG path data per icon, drawn with a 1.75px round stroke in a 24x24 box. */
 const PATHS: Record<IconName, string> = {
@@ -28,6 +28,7 @@ const PATHS: Record<IconName, string> = {
   forward: 'M12 19V7 M7 11l5-5 5 5',
   backward: 'M12 5v12 M7 13l5 5 5-5',
   close: 'M6 6l12 12 M18 6L6 18',
+  home: 'M4 11l8-7 8 7 M6 10v10h4v-6h4v6h4V10',
 };
 
 function Svg(props: { d: string; size: number }) {

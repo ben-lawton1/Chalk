@@ -8,7 +8,7 @@ import { createArrow, createShape, createText, setElementText } from './scene';
 import { MIGRATIONS, parseSceneFile, restoreElements, restoreStyle, SceneParseError, toSceneFile } from './serialize';
 
 function envelope(elements: unknown, over: Record<string, unknown> = {}): Record<string, unknown> {
-  return { type: 'chalk/scene', version: 1, elements, ...over };
+  return { type: 'chalk/scene', version: 2, elements, ...over };
 }
 function rawShape(over: Record<string, unknown> = {}): Record<string, unknown> {
   return { id: 'shape1', seed: 5, type: 'shape', shape: 'rectangle', x: 0, y: 0, width: 100, height: 50, label: '', style: { ...DEFAULT_STYLE }, ...over };
@@ -32,8 +32,8 @@ describe('SceneParseError / MIGRATIONS', () => {
     expect(e.name).toBe('SceneParseError');
     expect(e.message).toBe('boom');
   });
-  it('MIGRATIONS is empty in v1', () => {
-    expect(MIGRATIONS).toEqual({});
+  it('MIGRATIONS has the v1 -> v2 step only', () => {
+    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
   });
 });
 
@@ -54,7 +54,7 @@ describe('toSceneFile / parseSceneFile round trip', () => {
     const els = sampleScene();
     const f = toSceneFile(els);
     expect(f.type).toBe('chalk/scene');
-    expect(f.version).toBe(1);
+    expect(f.version).toBe(2);
     expect(f.elements).toEqual(els);
     expect(f.elements).not.toBe(els);
     expect(toSceneFile([]).elements).toEqual([]);
@@ -88,7 +88,7 @@ describe('parseSceneFile rejects bad envelopes', () => {
     expect(() => parseSceneFile(envelope([], { version: v }))).toThrow(SceneParseError);
   });
   it('rejects a future version with a clear message', () => {
-    expect(() => parseSceneFile(envelope([], { version: 2 }))).toThrow('This file was made by a newer Chalk');
+    expect(() => parseSceneFile(envelope([], { version: 3 }))).toThrow('This file was made by a newer Chalk');
     expect(() => parseSceneFile(envelope([], { version: 99 }))).toThrow(SceneParseError);
   });
   it('rejects when elements is not an array', () => {
@@ -392,5 +392,74 @@ describe('parseSceneFile end to end', () => {
     const snapshot = JSON.stringify(file);
     parseSceneFile(file);
     expect(JSON.stringify(file)).toBe(snapshot);
+  });
+});
+
+describe('v1 -> v2 migration', () => {
+  const v1 = (elements: unknown[]) => envelope(elements, { version: 1 });
+  const lightStyle = { ...DEFAULT_STYLE, strokeColor: '#1e1e1e', backgroundColor: 'transparent' };
+
+  it('remaps the light palette to the dark one (case-insensitive, exact matches only)', () => {
+    const pairs: [string, string][] = [
+      ['#1e1e1e', '#e9ecef'], ['#E03131', '#ff6b6b'], ['#2f9e44', '#69db7c'], ['#1971c2', '#4dabf7'], ['#f08c00', '#ffa94d'],
+    ];
+    const bgs: [string, string][] = [['#ffc9c9', '#5c2a2a'], ['#B2F2BB', '#1f4a2c'], ['#a5d8ff', '#1d3b57'], ['#ffec99', '#5a4a17']];
+    pairs.forEach(([from, to], i) => {
+      const bg = bgs[i % bgs.length]!;
+      const out = parseSceneFile(v1([rawShape({ style: { ...lightStyle, strokeColor: from, backgroundColor: bg[0] } })]));
+      expect(out[0]!.style.strokeColor).toBe(to);
+      expect(out[0]!.style.backgroundColor).toBe(bg[1]);
+    });
+  });
+  it('leaves custom colours, transparent and text colours consistent', () => {
+    const out = parseSceneFile(v1([
+      rawShape({ id: 'a', style: { ...lightStyle, strokeColor: '#123456', backgroundColor: '#fedcba' } }),
+      rawText({ id: 't', style: { ...lightStyle, strokeColor: '#e03131' } }),
+    ]));
+    expect(out[0]!.style).toMatchObject({ strokeColor: '#123456', backgroundColor: '#fedcba' });
+    expect(out[1]!.style.strokeColor).toBe('#ff6b6b');
+    expect(out[1]!.style.backgroundColor).toBe('transparent');
+  });
+  it('does not remap a v2 file', () => {
+    const out = parseSceneFile(envelope([rawShape({ style: { ...lightStyle, strokeColor: '#e03131' } })]));
+    expect(out[0]!.style.strokeColor).toBe('#e03131');
+  });
+  it('leaves positions alone when everything is already at x, y >= 0', () => {
+    const out = parseSceneFile(v1([rawShape({ x: 5, y: 7 })])) as ShapeElement[];
+    expect([out[0]!.x, out[0]!.y]).toEqual([5, 7]);
+  });
+  it('shifts negative-coordinate content into the page, keeping the margin', () => {
+    const out = parseSceneFile(v1([rawShape({ id: 'a', x: -200, y: -50 }), rawShape({ id: 'b', x: 100, y: 20 })])) as ShapeElement[];
+    expect([out[0]!.x, out[0]!.y]).toEqual([32, 32]);
+    expect([out[1]!.x, out[1]!.y]).toEqual([332, 102]);
+  });
+  it('shifts only the negative axis', () => {
+    const out = parseSceneFile(v1([rawShape({ x: -100, y: 60 })])) as ShapeElement[];
+    expect([out[0]!.x, out[0]!.y]).toEqual([32, 60]);
+  });
+  it('keeps bound arrows bound and routed after the shift', () => {
+    const a = { ...createShape('rectangle', { x: -300, y: -100, width: 100, height: 60 }, DEFAULT_STYLE), id: 'A' };
+    const b = { ...createShape('rectangle', { x: 100, y: 100, width: 100, height: 60 }, DEFAULT_STYLE), id: 'B' };
+    const arrow: ArrowElement = {
+      ...createArrow({ x: 0, y: 0 }, { x: 1, y: 1 }, DEFAULT_STYLE), id: 'AR',
+      startBinding: { elementId: 'A', fixedPoint: [0.5, 0.5] }, endBinding: { elementId: 'B', fixedPoint: [0.5, 0.5] },
+    };
+    const els = [...updateBoundArrows([a, b, arrow], null)];
+    const out = parseSceneFile(v1(JSON.parse(JSON.stringify(els)) as unknown[]));
+    const [oa, ob, oar] = out as [ShapeElement, ShapeElement, ArrowElement];
+    expect([oa.x, oa.y]).toEqual([32, 32]);
+    expect([ob.x, ob.y]).toEqual([432, 232]);
+    expect(oar.startBinding?.elementId).toBe('A');
+    expect(oar.endBinding?.elementId).toBe('B');
+    // The arrow is exactly the pre-migration arrow translated by the same delta (+332, +132).
+    expect(oar.start.x).toBeCloseTo((els[2] as ArrowElement).start.x + 332, 6);
+    expect(oar.start.y).toBeCloseTo((els[2] as ArrowElement).start.y + 132, 6);
+    expect(oar.end.x).toBeCloseTo((els[2] as ArrowElement).end.x + 332, 6);
+    expect(oar.end.y).toBeCloseTo((els[2] as ArrowElement).end.y + 132, 6);
+  });
+  it('shifts a free arrow by the same delta', () => {
+    const out = parseSceneFile(v1([rawArrow({ start: { x: -100, y: 0 }, end: { x: 50, y: 40 } })])) as ArrowElement[];
+    expect(out[0]!.start).toEqual({ x: 32, y: 32 });
+    expect(out[0]!.end).toEqual({ x: 182, y: 72 });
   });
 });

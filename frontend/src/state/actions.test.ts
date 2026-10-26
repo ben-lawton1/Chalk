@@ -4,12 +4,12 @@ import type { ArrowElement, ChalkElement, ShapeElement, TextElement } from '../t
 import { DEFAULT_STYLE, DUPLICATE_OFFSET } from '../constants';
 import { getBounds } from '../core/geometry';
 import { toSceneFile } from '../core/serialize';
-import { getState, resetState, setElements, setInteraction, setLastPointerWorld, setSelection, setState } from './store';
+import { getState, resetState, setElements, setInteraction, setLastPointerWorld, setSelection, setState, setViewport } from './store';
 import { clearHistory, getHistorySizes } from './history';
 import {
   applyStyle, closeDialog, commitEditing, copySelection, createTextAt, cutSelection, deleteSelection, duplicateSelection,
   editSelection, finishCreation, nudgeSelection, openDialog, pasteClipboard, pasteText, placeShape, redo, reorderSelection,
-  selectAll, setTool, startEditing, toggleToolLock, undo, updateEditingText, zoomIn, zoomOut, zoomToFit, zoomToSelection, resetZoom,
+  selectAll, setTool, startEditing, toggleToolLock, undo, updateEditingText, zoomIn, zoomOut, zoomToFit, zoomToSelection, resetZoom, goHome,
 } from './actions';
 
 function rect(id: string, x: number, y: number, w = 100, h = 60): ShapeElement {
@@ -362,6 +362,15 @@ describe('view', () => {
   it('zoomToFit on an empty board is the identity viewport', () => {
     setState({ viewportSize: { width: 800, height: 600 }, viewport: { scrollX: 5, scrollY: 5, zoom: 3 } });
     zoomToFit();
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+  });
+  it('goHome returns to the top-left corner at 100%', () => {
+    setState({ viewport: { scrollX: -900, scrollY: -400, zoom: 3 } });
+    goHome();
+    expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+  });
+  it('panning past the home corner is clamped', () => {
+    setViewport({ scrollX: 250, scrollY: 90, zoom: 1 });
     expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
   });
   it('zoomToSelection falls back to zoomToFit with no selection', () => {
