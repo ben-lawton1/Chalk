@@ -484,7 +484,7 @@ export interface ShortcutInfo {
   /** Display string, e.g. 'Ctrl + Z'. */
   keys: string;
   description: string;
-  group: 'Tools' | 'Edit' | 'View' | 'File' | 'Pen & touch';
+  group: 'Tools' | 'Edit' | 'View' | 'File' | 'Pen & touch' | 'Notes';
 }
 
 // ---------------------------------------------------------------------------

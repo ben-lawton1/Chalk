@@ -7,7 +7,7 @@ import { Icon } from './icons';
 
 type Group = ShortcutInfo['group'];
 const LEFT: readonly Group[] = ['Tools', 'Pen & touch', 'View', 'File'];
-const RIGHT: readonly Group[] = ['Edit'];
+const RIGHT: readonly Group[] = ['Edit', 'Notes'];
 
 function Column(props: { groups: readonly Group[] }) {
   return (

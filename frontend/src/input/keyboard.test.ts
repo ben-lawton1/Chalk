@@ -256,7 +256,7 @@ describe('edit and tool keys', () => {
 
 describe('SHORTCUTS', () => {
   it('covers every group and has no empty fields', () => {
-    expect(new Set(SHORTCUTS.map((s) => s.group))).toEqual(new Set(['Tools', 'Edit', 'View', 'File', 'Pen & touch']));
+    expect(new Set(SHORTCUTS.map((s) => s.group))).toEqual(new Set(['Tools', 'Edit', 'View', 'File', 'Pen & touch', 'Notes']));
     for (const s of SHORTCUTS) {
       expect(s.keys).not.toBe('');
       expect(s.description).not.toBe('');
