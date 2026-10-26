@@ -1,6 +1,6 @@
 // Unit tests for core/viewport (WP0).
 import { describe, expect, it } from 'vitest';
-import { clampViewport, clampZoom, fitToBounds, pageOrigin, panBy, screenToWorld, viewportCenter, visibleWorldRect, worldToScreen, zoomAt } from './viewport';
+import { clampViewport, clampZoom, fitToBounds, pageOrigin, panBy, pinchViewport, screenToWorld, viewportCenter, visibleWorldRect, worldToScreen, zoomAt } from './viewport';
 import { MAX_ZOOM, MIN_ZOOM, PAGE_MARGIN } from '../constants';
 
 const v = { scrollX: 37, scrollY: -120, zoom: 1.7 };
@@ -117,5 +117,57 @@ describe('pageOrigin and clampViewport', () => {
   it('zooming out near the origin keeps the origin pinned top-left', () => {
     const z = clampViewport(zoomAt({ scrollX: 0, scrollY: 0, zoom: 1 }, 0.5, { x: 400, y: 300 }), { x: 0, y: 0 });
     expect(z).toEqual({ scrollX: 0, scrollY: 0, zoom: 0.5 });
+  });
+});
+
+describe('pinchViewport', () => {
+  const start = { scrollX: 10, scrollY: -20, zoom: 1 };
+  const a0 = { x: 100, y: 200 };
+  const b0 = { x: 300, y: 200 };
+
+  it('is the identity when the fingers do not move', () => {
+    const r = pinchViewport(start, a0, b0, a0, b0);
+    expect(r.zoom).toBeCloseTo(1);
+    expect(r.scrollX).toBeCloseTo(10);
+    expect(r.scrollY).toBeCloseTo(-20);
+  });
+  it('spreading by 2x doubles the zoom and keeps the world point under the midpoint', () => {
+    const a1 = { x: 0, y: 200 };
+    const b1 = { x: 400, y: 200 }; // same midpoint (200, 200), twice as far apart
+    const r = pinchViewport(start, a0, b0, a1, b1);
+    expect(r.zoom).toBeCloseTo(2);
+    const before = screenToWorld({ x: 200, y: 200 }, start);
+    const after = screenToWorld({ x: 200, y: 200 }, r);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y);
+  });
+  it('moving both fingers pans without zooming, and the world points follow the fingers', () => {
+    const a1 = { x: 130, y: 250 };
+    const b1 = { x: 330, y: 250 };
+    const r = pinchViewport(start, a0, b0, a1, b1);
+    expect(r.zoom).toBeCloseTo(1);
+    const w = screenToWorld(a0, start);
+    const now = worldToScreen(w, r);
+    expect(now.x).toBeCloseTo(a1.x);
+    expect(now.y).toBeCloseTo(a1.y);
+  });
+  it('zooms about the midpoint while it moves (both at once)', () => {
+    const a1 = { x: 160, y: 300 };
+    const b1 = { x: 260, y: 300 }; // half the distance, midpoint (210, 300)
+    const r = pinchViewport(start, a0, b0, a1, b1);
+    expect(r.zoom).toBeCloseTo(0.5);
+    const w = screenToWorld({ x: 200, y: 200 }, start);
+    const now = worldToScreen(w, r);
+    expect(now.x).toBeCloseTo(210);
+    expect(now.y).toBeCloseTo(300);
+  });
+  it('clamps the zoom to the limits', () => {
+    expect(pinchViewport(start, a0, b0, { x: -5000, y: 200 }, { x: 5000, y: 200 }).zoom).toBe(MAX_ZOOM);
+    expect(pinchViewport(start, a0, b0, { x: 199, y: 200 }, { x: 201, y: 200 }).zoom).toBe(MIN_ZOOM);
+  });
+  it('coincident start fingers do not divide by zero', () => {
+    const r = pinchViewport(start, a0, a0, { x: 0, y: 0 }, { x: 50, y: 0 });
+    expect(Number.isFinite(r.zoom) && Number.isFinite(r.scrollX)).toBe(true);
+    expect(r.zoom).toBe(1);
   });
 });

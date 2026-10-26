@@ -786,6 +786,196 @@ describe('pointer router', () => {
     expect(v.zoom).toBeCloseTo(Math.exp(0.1));
     expect(200 / v.zoom - v.scrollX).toBeCloseTo(200); // world point under the cursor is fixed
   });
+  // ---- v3: pen buttons, touch routing, palm rejection ----
+  const PEN = { pointerType: 'pen' } as const;
+  const TIP = { ...PEN, button: 0, buttons: 1 } as const;
+  const ERASER = { ...PEN, button: 5, buttons: 32 } as const;
+  const BARREL = { ...PEN, button: 2, buttons: 2 } as const;
+  const touchEv = (type: string, x: number, y: number, id = 11) =>
+    ptr(type, x, y, { pointerType: 'touch', pointerId: id, buttons: type === 'pointerup' ? 0 : 1 });
+  const penUp = (x: number, y: number) => ptr('pointerup', x, y, { ...PEN, button: 0, buttons: 0 });
+
+  it('the pen tip draws with the pen tool: one ink element, pressure kept', () => {
+    setState({ tool: 'pen' });
+    ptr('pointerdown', 100, 100, { ...TIP, pressure: 0.3 });
+    ptr('pointermove', 150, 120, { ...TIP, pressure: 0.6 });
+    penUp(200, 100);
+    const ink = els().filter((e): e is InkElement => e.type === 'ink');
+    expect(ink).toHaveLength(1);
+    expect(ink[0]!.pressure).toBe(true);
+    expect(getState().tool).toBe('pen');
+  });
+  it('the eraser button erases whatever the tool is, as one undo step, and the move is not cut short by buttons = 32', () => {
+    setState({ tool: 'pen' });
+    seed(rect('a', 100, 100, 100, 100), rect('b', 400, 100, 100, 100));
+    ptr('pointerdown', 150, 150, ERASER);
+    expect(getState().interaction.gestureActive).toBe(true);
+    ptr('pointermove', 300, 150, ERASER);
+    ptr('pointermove', 450, 150, ERASER);
+    expect(els()).toHaveLength(0);
+    ptr('pointerup', 450, 150, { ...PEN, button: 5, buttons: 0 });
+    expect(getState().interaction.gestureActive).toBe(false);
+    expect(getState().tool).toBe('pen');
+    expect(getHistorySizes().past).toBe(1);
+    undo();
+    expect(els()).toHaveLength(2);
+  });
+  it('the barrel button lassos: it selects the elements inside and leaves the tool alone', () => {
+    setState({ tool: 'pen' });
+    seed(rect('a', 50, 50, 80, 80), rect('b', 200, 60, 80, 80), rect('c', 600, 400, 80, 80));
+    ptr('pointerdown', 10, 10, BARREL);
+    ptr('pointermove', 350, 10, BARREL);
+    expect(getState().interaction.lasso).not.toBeNull();
+    ptr('pointermove', 350, 200, BARREL);
+    ptr('pointermove', 10, 200, BARREL);
+    ptr('pointerup', 12, 12, { ...PEN, button: 2, buttons: 0 });
+    expect(getState().selectedIds).toEqual(['a', 'b']);
+    expect(getState().tool).toBe('pen');
+    expect(els()).toHaveLength(3); // no ink was drawn
+  });
+  it('"Swap pen buttons" exchanges them', () => {
+    setState({ tool: 'pen', penButtonsSwapped: true });
+    seed(rect('a', 100, 100, 100, 100));
+    ptr('pointerdown', 150, 150, ERASER); // now a lasso
+    ptr('pointermove', 400, 150, ERASER);
+    expect(getState().interaction.lasso).not.toBeNull();
+    ptr('pointerup', 400, 150, { ...PEN, button: 5, buttons: 0 });
+    expect(els()).toHaveLength(1);
+    ptr('pointerdown', 150, 150, BARREL); // now the eraser
+    ptr('pointerup', 150, 150, { ...PEN, button: 2, buttons: 0 });
+    expect(els()).toHaveLength(0);
+  });
+  it('a mouse right click still starts nothing, and the mouse is never mistaken for a pen button', () => {
+    setState({ tool: 'pen' });
+    ptr('pointerdown', 100, 100, { pointerType: 'mouse', button: 2, buttons: 2 });
+    expect(getState().interaction.gestureActive).toBe(false);
+  });
+  it('pen tip inside the selection moves it instead of drawing; elsewhere it clears the selection and draws', () => {
+    setState({ tool: 'pen' });
+    seed(rect('a', 100, 100, 100, 100));
+    setSelection(['a']);
+    ptr('pointerdown', 150, 150, TIP);
+    ptr('pointermove', 190, 170, TIP);
+    penUp(190, 170);
+    const a = els()[0] as ShapeElement;
+    expect([a.x, a.y]).toEqual([140, 120]);
+    expect(els()).toHaveLength(1);
+    expect(getState().selectedIds).toEqual(['a']);
+    ptr('pointerdown', 500, 500, TIP);
+    expect(getState().selectedIds).toEqual([]);
+    ptr('pointermove', 540, 520, TIP);
+    penUp(560, 540);
+    expect(els().filter((e) => e.type === 'ink')).toHaveLength(1);
+  });
+  it('a pen double tap on a shape with the select tool edits it; the native dblclick is ignored for pens', () => {
+    setState({ tool: 'select' });
+    seed(rect('a', 100, 100, 100, 100));
+    ptr('pointerdown', 150, 150, TIP);
+    penUp(150, 150);
+    ptr('pointerdown', 151, 150, TIP);
+    penUp(151, 150);
+    expect(getState().editing?.id).toBe('a');
+    setState({ editing: null });
+    fire(canvas, 'dblclick', { clientX: 400, clientY: 400, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+    expect(els()).toHaveLength(1); // no text box was created at (400, 400)
+  });
+  it('a mouse double-click still creates text on empty canvas', () => {
+    setState({ tool: 'select' });
+    ptr('pointerdown', 400, 400);
+    ptr('pointerup', 400, 400);
+    fire(canvas, 'dblclick', { clientX: 400, clientY: 400, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+    expect(els()).toHaveLength(1);
+    expect(els()[0]!.type).toBe('text');
+  });
+  it('hovering with the eraser button held shows an eraser cursor; the barrel button shows a crosshair', () => {
+    setState({ tool: 'select' });
+    ptr('pointermove', 50, 50, { ...PEN, button: -1, buttons: 32 });
+    expect(getState().interaction.cursor).toContain('svg');
+    ptr('pointermove', 60, 50, { ...PEN, button: -1, buttons: 2 });
+    expect(getState().interaction.cursor).toBe('crosshair');
+    ptr('pointermove', 70, 50, { ...PEN, button: -1, buttons: 0 });
+    expect(getState().interaction.cursor).toBeNull();
+  });
+
+  it('a finger drag pans with any tool and never draws; touch does not capture a route', () => {
+    setState({ tool: 'pen' });
+    touchEv('pointerdown', 300, 300);
+    touchEv('pointermove', 240, 270);
+    touchEv('pointerup', 240, 270);
+    expect(getState().viewport.scrollX).toBe(-60);
+    expect(getState().viewport.scrollY).toBe(-30);
+    expect(els()).toHaveLength(0);
+    expect(getState().interaction.gestureActive).toBe(false);
+  });
+  it('two fingers pinch-zoom', () => {
+    touchEv('pointerdown', 200, 300, 11);
+    touchEv('pointerdown', 400, 300, 12);
+    touchEv('pointermove', 600, 300, 12);
+    expect(getState().viewport.zoom).toBeCloseTo(2);
+    touchEv('pointerup', 600, 300, 12);
+    touchEv('pointerup', 200, 300, 11);
+    expect(getState().interaction.gestureActive).toBe(false);
+  });
+  it('a finger tap selects, then a second tap opens the editor', () => {
+    seed(rect('a', 100, 100, 100, 100));
+    touchEv('pointerdown', 150, 150);
+    touchEv('pointerup', 150, 150);
+    expect(getState().selectedIds).toEqual(['a']);
+    touchEv('pointerdown', 151, 150);
+    touchEv('pointerup', 151, 150);
+    expect(getState().editing?.id).toBe('a');
+  });
+  it('palm: a finger is ignored while the pen is down, while it hovers, and for a moment after it leaves', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(100_000);
+      setState({ tool: 'pen' });
+      seed(rect('a', 100, 100, 100, 100));
+      ptr('pointerdown', 500, 500, TIP);
+      touchEv('pointerdown', 150, 150);
+      touchEv('pointerup', 150, 150);
+      expect(getState().selectedIds).toEqual([]); // a pen route is active: no tap
+      ptr('pointermove', 520, 520, TIP);
+      penUp(530, 530);
+      touchEv('pointerdown', 150, 150);
+      touchEv('pointermove', 50, 50);
+      touchEv('pointerup', 50, 50);
+      expect(getState().viewport.scrollX).toBe(0); // hovering pen: no pan
+      fire(canvas, 'pointerleave', { pointerType: 'pen' });
+      vi.setSystemTime(100_100); // still inside the grace period
+      touchEv('pointerdown', 150, 150);
+      touchEv('pointerup', 150, 150);
+      expect(getState().selectedIds).toEqual([]);
+      vi.setSystemTime(101_000);
+      touchEv('pointerdown', 150, 150);
+      touchEv('pointerup', 150, 150);
+      expect(getState().selectedIds).toEqual(['a']); // a finger again
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('the pen arriving cancels a palm that already panned and puts the view back', () => {
+    setState({ tool: 'select' });
+    touchEv('pointerdown', 300, 300);
+    touchEv('pointermove', 200, 300);
+    expect(getState().viewport.scrollX).toBe(-100);
+    ptr('pointerdown', 500, 500, TIP);
+    expect(getState().viewport.scrollX).toBe(0);
+    penUp(500, 500);
+  });
+  it('Escape-style cancelGesture also ends a touch gesture', () => {
+    touchEv('pointerdown', 300, 300);
+    touchEv('pointermove', 200, 300);
+    expect(getState().interaction.gestureActive).toBe(true);
+    pointer.cancelGesture();
+    expect(getState().interaction.gestureActive).toBe(false);
+    expect(getState().viewport.scrollX).toBe(-100);
+  });
+  it('pointerleave clears the eraser ring', () => {
+    setState({ interaction: { ...getState().interaction, eraser: { x: 5, y: 5 } } });
+    fire(canvas, 'pointerleave', { pointerType: 'mouse' });
+    expect(getState().interaction.eraser).toBeNull();
+  });
   it('detach is idempotent and removes the listeners', () => {
     detach();
     detach();

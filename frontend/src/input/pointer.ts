@@ -1,12 +1,20 @@
 // Pointer router: canvas pointer events -> tools, wheel pan/zoom, Space-pan and cursor sync (WP3).
-import type { PointerInfo, Tool } from '../types';
-import { WHEEL_LINE_PX, WHEEL_ZOOM_MAX_DELTA, WHEEL_ZOOM_SPEED } from '../constants';
+// v3: touch goes to input/touch.ts, pen buttons pick the eraser or lasso, and a finger resting next to the pen is ignored.
+import type { Point, PointerInfo, Tool } from '../types';
+import { PALM_GRACE_MS, TOUCH_TAP_SLOP_PX, WHEEL_LINE_PX, WHEEL_ZOOM_MAX_DELTA, WHEEL_ZOOM_SPEED } from '../constants';
 import { clamp } from '../core/math';
 import { panBy, screenToWorld, zoomAt } from '../core/viewport';
 import { TOOLS } from '../tools';
 import { handTool } from '../tools/hand';
-import { getState, setInteraction, setLastPointerWorld, setViewport, subscribe } from '../state/store';
+import { eraserTool } from '../tools/eraser';
+import { lassoTool } from '../tools/lasso';
+import { penTool } from '../tools/pen';
+import { isOverSelection, selectTool } from '../tools/select';
+import { getState, setInteraction, setLastPointerWorld, setSelection, setViewport, subscribe } from '../state/store';
 import { commitEditing } from '../state/actions';
+import { classifyPen, ERASER_CURSOR } from './penButtons';
+import { createTapTracker } from './taps';
+import { touchGestures } from './touch';
 
 const NON_TEXT_INPUT_TYPES = ['range', 'color', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file'];
 
@@ -27,6 +35,17 @@ let routePointerId: number | null = null;
 let spaceHeld = false;
 let detachCurrent: (() => void) | null = null;
 let updateCursorFn: (() => void) | null = null;
+/** True when the current route was started by a pen tip (so a quick tap can count towards a double tap). */
+let routeIsPenTip = false;
+let routeDownScreen: Point | null = null;
+/** Farthest the route's pointer has been from its down point (screen px). */
+let routeMaxMove = 0;
+/** Pen proximity, for palm rejection. */
+let penInRange = false;
+let lastPenAt = -Infinity;
+/** Only a mouse double-click is honoured natively; pen and touch double taps are detected by Chalk itself. */
+let lastDownPointerType: PointerInfo['pointerType'] = 'mouse';
+const penTaps = createTapTracker(() => Date.now());
 
 export function isSpaceHeld(): boolean {
   return spaceHeld;
@@ -41,13 +60,15 @@ function releaseCapture(canvas: HTMLCanvasElement | null, pointerId: number | nu
   }
 }
 
-/** Clears the route, calls its onCancel(), releases capture and ends the gesture. No-op if none. */
+/** Clears the route, calls its onCancel(), releases capture and ends the gesture (touch gestures too). No-op if none. */
 export function cancelGesture(): void {
+  touchGestures.cancelAll(false);
   const r = route;
   if (!r) return;
   const pid = routePointerId;
   route = null;
   routePointerId = null;
+  routeIsPenTip = false;
   try {
     r.onCancel?.();
   } finally {
@@ -114,10 +135,21 @@ function buildInfo(canvas: HTMLCanvasElement, e: MouseEvent): PointerInfo {
 function runPointerUp(canvas: HTMLCanvasElement, e: PointerEvent): void {
   const r = route;
   if (!r) return;
+  const penTip = routeIsPenTip;
+  const moved = routeMaxMove;
+  const down = routeDownScreen;
   route = null;
   routePointerId = null;
+  routeIsPenTip = false;
   try {
-    r.onPointerUp(buildInfo(canvas, e));
+    const info = buildInfo(canvas, e);
+    r.onPointerUp(info);
+    // A pen double tap (the browser's dblclick is ignored for pens): two quick taps that barely moved.
+    if (penTip && down && Math.max(moved, Math.hypot(info.screen.x - down.x, info.screen.y - down.y)) <= TOUCH_TAP_SLOP_PX) {
+      if (penTaps.tap(info.screen)) r.onDoubleClick?.(info);
+    } else if (penTip) {
+      penTaps.reset();
+    }
   } finally {
     releaseCapture(canvas, e.pointerId);
     setInteraction({ gestureActive: false });
@@ -148,6 +180,25 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
     // 0. Blur whatever else has focus (the mousedown preventDefault would leave it focused).
     const ae = document.activeElement;
     if (ae instanceof HTMLElement && ae !== document.body && ae.getAttribute('data-testid') !== 'text-editor') ae.blur();
+    const now = Date.now();
+    lastDownPointerType = e.pointerType === 'pen' || e.pointerType === 'touch' ? e.pointerType : 'mouse';
+    // 0b. A finger: the touch state machine (it never draws). Ignored while a pen is at work or hovering (palm rejection).
+    if (e.pointerType === 'touch') {
+      if (route !== null || penInRange || now - lastPenAt < PALM_GRACE_MS) return;
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* synthetic or already-ended pointers cannot be captured */
+      }
+      touchGestures.down(e.pointerId, buildInfo(canvas, e));
+      return;
+    }
+    // 0c. The pen arrived: whatever the touch state machine is doing was a palm. Put the view back.
+    if (e.pointerType === 'pen') {
+      penInRange = true;
+      lastPenAt = now;
+      touchGestures.cancelAll(true);
+    }
     // 1. A gesture is active: recover a lost pointerup of the same pointer, ignore any other pointer.
     if (route !== null) {
       if (e.pointerId === routePointerId) runPointerUp(canvas, e);
@@ -158,15 +209,31 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
       commitEditing();
       return;
     }
-    // 3. Choose the route.
-    const tool = getState().tool;
+    // 3. Choose the route. The pen's eraser and barrel buttons are told apart by the signal the browser reports.
+    const s = getState();
+    const tool = s.tool;
+    const penAction = e.pointerType === 'pen' ? classifyPen(e.button, e.buttons, s.penButtonsSwapped) : 'tip';
+    const info = buildInfo(canvas, e);
     let chosen: Tool;
-    if (e.button === 1 || spaceHeld || tool === 'hand') chosen = handTool;
-    else if (e.button === 0) chosen = TOOLS[tool];
-    else return;
+    let penTip = false;
+    if (penAction === 'erase') chosen = eraserTool;
+    else if (penAction === 'lasso') chosen = lassoTool;
+    else if (e.button === 1 || spaceHeld || tool === 'hand') chosen = handTool;
+    else if (e.button === 0) {
+      chosen = TOOLS[tool];
+      if (tool === 'pen' || tool === 'eraser' || tool === 'lasso') {
+        // OneNote behaviour: on the current selection the tip moves or resizes it; anywhere else it starts over.
+        if (s.selectedIds.length > 0 && isOverSelection(info)) chosen = selectTool;
+        else if (s.selectedIds.length > 0) setSelection([]);
+      }
+      penTip = e.pointerType === 'pen';
+    } else return;
     // 4. Start the gesture.
     route = chosen;
     routePointerId = e.pointerId;
+    routeIsPenTip = penTip;
+    routeDownScreen = info.screen;
+    routeMaxMove = 0;
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {
@@ -175,7 +242,7 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
     setInteraction({ gestureActive: true });
     updateCursor();
     try {
-      chosen.onPointerDown(buildInfo(canvas, e));
+      chosen.onPointerDown(info);
     } catch (err) {
       console.error(err);
       cancelGesture();
@@ -185,28 +252,69 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
   const onPointerMove = (e: PointerEvent): void => {
     const info = buildInfo(canvas, e);
     setLastPointerWorld(info.world);
+    if (e.pointerType === 'touch') {
+      touchGestures.move(e.pointerId, info);
+      return;
+    }
+    if (e.pointerType === 'pen') {
+      penInRange = true;
+      lastPenAt = Date.now();
+    }
     if (route !== null) {
       if (e.pointerId !== routePointerId) return;
-      if ((e.buttons & 7) === 0) runPointerUp(canvas, e);
-      else route.onPointerMove(info);
+      // Left, right, middle and the pen's eraser button all keep a gesture alive (buttons bits 1, 2, 4 and 32).
+      if ((e.buttons & (1 | 2 | 4 | 32)) === 0) runPointerUp(canvas, e);
+      else {
+        if (routeDownScreen) routeMaxMove = Math.max(routeMaxMove, Math.hypot(info.screen.x - routeDownScreen.x, info.screen.y - routeDownScreen.y));
+        route.onPointerMove(info);
+      }
       return;
     }
     TOOLS[getState().tool].onPointerMove(info);
+    if (e.pointerType === 'pen') {
+      // Hovering with a pen button held: show the mode before touching down.
+      const action = classifyPen(e.button, e.buttons, getState().penButtonsSwapped);
+      if (action === 'erase') setInteraction({ cursor: ERASER_CURSOR });
+      else if (action === 'lasso') setInteraction({ cursor: 'crosshair' });
+    }
   };
 
   const onPointerUp = (e: PointerEvent): void => {
+    if (e.pointerType === 'touch') {
+      touchGestures.up(e.pointerId, buildInfo(canvas, e));
+      releaseCapture(canvas, e.pointerId);
+      return;
+    }
     if (route !== null && e.pointerId === routePointerId) runPointerUp(canvas, e);
   };
   const onPointerCancel = (e: PointerEvent): void => {
+    if (e.pointerType === 'touch') {
+      touchGestures.cancel(e.pointerId);
+      releaseCapture(canvas, e.pointerId);
+      return;
+    }
     if (route !== null && e.pointerId === routePointerId) cancelGesture();
   };
   const onLostCapture = (e: PointerEvent): void => {
+    if (e.pointerType === 'touch') {
+      if (touchGestures.isTracking(e.pointerId)) touchGestures.cancel(e.pointerId);
+      return;
+    }
     if (route !== null && e.pointerId === routePointerId) cancelGesture();
   };
-  const onPointerLeave = (): void => {
-    if (route === null) setInteraction({ hoverId: null, bindTarget: null, cursor: null });
+  const onPointerOver = (e: PointerEvent): void => {
+    if (e.pointerType === 'pen') {
+      penInRange = true;
+      lastPenAt = Date.now();
+    }
+  };
+  const onPointerLeave = (e: PointerEvent): void => {
+    if (e.pointerType === 'pen') penInRange = false;
+    if (route === null) setInteraction({ hoverId: null, bindTarget: null, cursor: null, eraser: null });
   };
   const onDoubleClick = (e: MouseEvent): void => {
+    // Pen and touch double taps are detected by Chalk itself; honouring this too would fire twice.
+    if (lastDownPointerType !== 'mouse') return;
     TOOLS[getState().tool].onDoubleClick?.(buildInfo(canvas, e));
   };
   const onCanvasWheel = (e: WheelEvent): void => handleWheel(e);
@@ -242,6 +350,8 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('lostpointercapture', onLostCapture);
+  canvas.addEventListener('pointerover', onPointerOver);
+  canvas.addEventListener('pointerout', onPointerLeave);
   canvas.addEventListener('pointerleave', onPointerLeave);
   canvas.addEventListener('dblclick', onDoubleClick);
   canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
@@ -264,6 +374,8 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
     canvas.removeEventListener('pointerup', onPointerUp);
     canvas.removeEventListener('pointercancel', onPointerCancel);
     canvas.removeEventListener('lostpointercapture', onLostCapture);
+    canvas.removeEventListener('pointerover', onPointerOver);
+    canvas.removeEventListener('pointerout', onPointerLeave);
     canvas.removeEventListener('pointerleave', onPointerLeave);
     canvas.removeEventListener('dblclick', onDoubleClick);
     canvas.removeEventListener('wheel', onCanvasWheel);
@@ -273,6 +385,10 @@ export function attachPointerInput(canvas: HTMLCanvasElement): () => void {
     window.removeEventListener('blur', onBlur);
     unsubscribe();
     spaceHeld = false;
+    penInRange = false;
+    lastPenAt = -Infinity;
+    lastDownPointerType = 'mouse';
+    penTaps.reset();
     if (attachedCanvas === canvas) attachedCanvas = null;
     if (detachCurrent === detach) detachCurrent = null;
     if (updateCursorFn === updateCursor) updateCursorFn = null;

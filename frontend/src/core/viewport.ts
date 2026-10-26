@@ -53,3 +53,16 @@ export function visibleWorldRect(v: Viewport, size: Size): Rect {
 export function viewportCenter(size: Size): Point {
   return { x: size.width / 2, y: size.height / 2 };
 }
+
+/**
+ * Two-finger gesture: the viewport `startV` zoomed by |a1 b1| / |a0 b0| about the start midpoint, then panned by the
+ * midpoint's movement, so the world points under the fingers stay under them. Zoom is clamped like zoomAt.
+ */
+export function pinchViewport(startV: Viewport, a0: Point, b0: Point, a1: Point, b1: Point): Viewport {
+  const d0 = Math.hypot(b0.x - a0.x, b0.y - a0.y);
+  const d1 = Math.hypot(b1.x - a1.x, b1.y - a1.y);
+  const ratio = d0 < 1 ? 1 : d1 / d0;
+  const m0 = { x: (a0.x + b0.x) / 2, y: (a0.y + b0.y) / 2 };
+  const m1 = { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 };
+  return panBy(zoomAt(startV, startV.zoom * ratio, m0), m1.x - m0.x, m1.y - m0.y);
+}
