@@ -255,6 +255,8 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'N or Notes button', description: 'Type in the page notes; the caret returns to where you left it', group: 'Notes' },
   { keys: 'Double-click in the notes column', description: 'Start typing there (notes mode)', group: 'Notes' },
   { keys: 'Esc', description: 'Leave notes mode (a menu closes first)', group: 'Notes' },
+  { keys: '/', description: 'Slash menu: blocks, table (/table 4x5), links. Esc closes it and keeps the text', group: 'Notes' },
+  { keys: '@ or [[', description: 'Link to another page (a chip; click it to open the page)', group: 'Notes' },
   { keys: '# , ## , ### + space', description: 'Heading 1, 2, 3', group: 'Notes' },
   { keys: '- , * or + then space', description: 'Bulleted list', group: 'Notes' },
   { keys: '1. + space', description: 'Numbered list', group: 'Notes' },

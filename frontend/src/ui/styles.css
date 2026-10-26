@@ -1031,3 +1031,124 @@ input, textarea { user-select: text; -webkit-user-select: text; }
   outline: none;
 }
 .notes-link-input:focus { border-color: var(--accent); }
+
+/* ---------- notes menus (v4 N-C): slash menu, page picker, /table size step, table toolbar (portalled to <body>) ---------- */
+.notes-menu {
+  position: fixed;
+  z-index: var(--z-overlay);
+  box-sizing: border-box;
+  width: 300px;
+  overflow-y: auto;
+  background: var(--island-bg);
+  color: var(--text);
+  border-radius: var(--radius);
+  box-shadow: var(--dialog-shadow);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 4px;
+}
+.notes-menu.page-menu { width: 340px; }
+.notes-menu-group { padding: 8px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); }
+.notes-menu-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; }
+.notes-menu-row[data-active="true"] { background: var(--hover-bg); }
+.notes-menu-icon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--active-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.notes-menu-text { display: flex; flex-direction: column; min-width: 0; }
+.notes-menu-title { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notes-menu-desc { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notes-menu-empty { padding: 10px 12px; color: var(--muted); }
+.notes-menu-new .notes-menu-title { color: var(--accent-strong); }
+
+.table-step { padding: 4px 6px 8px; }
+.table-step-fields { display: flex; align-items: flex-end; gap: 8px; padding: 2px 2px 8px; }
+.table-step-field { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; color: var(--muted); font-size: 12px; }
+.table-step-field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--hover-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+}
+.table-step-field input:focus { outline: none; border-color: var(--accent); }
+.table-step-times { padding-bottom: 7px; color: var(--muted); }
+.table-step-check { display: flex; align-items: center; gap: 8px; padding: 2px 2px 8px; color: var(--text); cursor: pointer; }
+.table-step-check input { accent-color: var(--accent); }
+.table-preview {
+  display: grid;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100px;
+  padding: 6px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.table-preview-cell { background: var(--active-bg); border-radius: 1px; min-width: 0; min-height: 0; }
+.table-preview-cell.head { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; }
+.table-step-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 8px; }
+.table-step-size { color: var(--muted); font-size: 12px; }
+.table-step-insert {
+  padding: 6px 12px;
+  background: var(--accent);
+  color: #0e1a14;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.table-step-insert:hover { background: var(--accent-strong); }
+
+.notes-menu.table-toolbar { width: auto; display: flex; gap: 2px; padding: 3px; overflow: visible; }
+.table-toolbar-btn {
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.table-toolbar-btn:hover { background: var(--hover-bg); }
+.table-toolbar-btn.danger { color: var(--danger); }
+.table-toolbar-btn.danger:hover { background: var(--danger-soft); }
+
+/* The page link chip (an inline atom in the notes). */
+.notes-editor .page-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 4px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  cursor: pointer;
+  vertical-align: baseline;
+  line-height: 1.35;
+}
+.notes-editor .page-link:hover { background: rgba(63, 185, 132, 0.28); }
+.notes-editor .page-link-icon { display: inline-flex; flex: 0 0 auto; opacity: 0.85; }
+.notes-editor .page-link-text { text-decoration: underline; text-decoration-color: rgba(95, 211, 160, 0.4); text-underline-offset: 2px; }
+.notes-editor .page-link[data-missing="true"] { background: var(--hover-bg); color: var(--muted); cursor: default; }
+.notes-editor .page-link[data-missing="true"] .page-link-text { text-decoration: line-through; text-decoration-color: var(--faint); }
+.notes-editor .page-link.ProseMirror-selectednode { outline: 2px solid var(--accent); }
+/* The pending /query or @query text. */
+.notes-editor .suggestion { color: var(--muted); }

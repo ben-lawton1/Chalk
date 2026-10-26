@@ -18,6 +18,7 @@ import type { NotesDoc, NotesJSON, Point } from '../../types';
 import { useAppState } from '../hooks';
 import { createNotesExtensions } from './editor';
 import { LinkPrompt, openLinkPrompt } from './LinkPrompt';
+import { NotesMenus } from './NotesMenus';
 import type { LinkPromptState } from './LinkPrompt';
 import { attachNotesTouchPan } from './touchPan';
 
@@ -199,6 +200,7 @@ function NotesEditor(props: { boardId: string }) {
       >
         <EditorContent editor={editor} />
       </div>
+      {editor && <NotesMenus editor={editor} onLinkPrompt={(ed) => setLinkPrompt(openLinkPrompt(ed))} />}
       {editor && linkPrompt && <LinkPrompt editor={editor} state={linkPrompt} onClose={() => setLinkPrompt(null)} />}
     </div>
   );

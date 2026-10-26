@@ -54,3 +54,39 @@ export function normalizeLinkUrl(raw: string): string {
   if (/^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith('/') || t.startsWith('#')) return t;
   return 'https://' + t;
 }
+
+/** The part of the screen a popup must stay inside (client px). */
+export interface PopupBounds { left: number; top: number; right: number; bottom: number }
+/** The anchor line a popup hangs off, e.g. the caret's `coordsAtPos` (client px). */
+export interface PopupAnchor { left: number; top: number; bottom: number }
+export interface PopupPlacement { left: number; top: number; maxHeight: number; placement: 'below' | 'above' }
+
+/**
+ * Places a popup of size `w` x `h` next to an anchor line, inside `bounds`. It goes below the anchor (or above, with `prefer: 'above'`);
+ * when it does not fit there it flips to the side with more room, and `maxHeight` shrinks it to fit (it then scrolls). The left edge is
+ * clamped so the popup stays inside the bounds.
+ */
+export function placePopup(
+  anchor: PopupAnchor,
+  size: Size,
+  bounds: PopupBounds,
+  opts: { gap?: number; margin?: number; prefer?: 'below' | 'above' } = {},
+): PopupPlacement {
+  const gap = opts.gap ?? 6;
+  const margin = opts.margin ?? 8;
+  const prefer = opts.prefer ?? 'below';
+  const minLeft = bounds.left + margin;
+  const maxLeft = Math.max(minLeft, bounds.right - margin - size.width);
+  const left = Math.min(Math.max(anchor.left, minLeft), maxLeft);
+  const below = Math.max(0, bounds.bottom - margin - (anchor.bottom + gap));
+  const above = Math.max(0, anchor.top - gap - (bounds.top + margin));
+  const fitsBelow = size.height <= below;
+  const fitsAbove = size.height <= above;
+  let placement: 'below' | 'above';
+  if (prefer === 'below') placement = fitsBelow || (!fitsAbove && below >= above) ? 'below' : 'above';
+  else placement = fitsAbove || (!fitsBelow && above >= below) ? 'above' : 'below';
+  const room = placement === 'below' ? below : above;
+  const used = Math.min(size.height, room);
+  const top = placement === 'below' ? anchor.bottom + gap : anchor.top - gap - used;
+  return { left, top, maxHeight: Math.max(0, room), placement };
+}
