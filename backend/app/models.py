@@ -1,6 +1,6 @@
 """Chalk HTTP API contract (pydantic v2).
 
-FROZEN after WP0. Only the integration package (WP6) may edit this file.
+Was FROZEN after WP0 (v1's parallel build); v2 may edit it.
 
 Field names are camelCase on purpose so they match the JSON wire format
 exactly, with no alias machinery. Scene *elements* are opaque JSON: the
@@ -18,9 +18,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 SCENE_TYPE = "chalk/scene"
-SCENE_VERSION = 1
+SCENE_VERSION = 2
 MAX_SCENE_BYTES = 10_000_000
-DEFAULT_BOARD_NAME = "Untitled board"
+DEFAULT_BOARD_NAME = "Untitled page"
 MAX_NAME_LENGTH = 120
 BOARD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
 
@@ -65,6 +65,8 @@ class BoardSummary(BaseModel):
     name: str
     version: int
     updatedAt: str
+    notebook: str
+    section: str
 
 
 class Board(BoardSummary):
@@ -80,8 +82,10 @@ class ConflictDetail(BaseModel):
 class BoardCreate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
     scene: dict[str, Any] | None = None
+    notebook: str | None = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
+    section: str | None = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
 
-    @field_validator("name")
+    @field_validator("name", "notebook", "section")
     @classmethod
     def _clean_name(cls, value: str | None) -> str | None:
         return clean_name(value)
@@ -90,6 +94,38 @@ class BoardCreate(BaseModel):
     @classmethod
     def _check_scene(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
         return check_scene(value)
+
+
+class SectionNode(BaseModel):
+    name: str
+    pages: list[BoardSummary]
+
+
+class NotebookNode(BaseModel):
+    name: str
+    sections: list[SectionNode]
+
+
+class LibraryTree(BaseModel):
+    path: str
+    notebooks: list[NotebookNode]
+
+
+class FolderInfo(BaseModel):
+    name: str
+
+
+class FolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
+
+    @field_validator("name")
+    @classmethod
+    def _clean_name(cls, value: str) -> str:
+        return clean_name(value) or value
+
+
+class FolderRename(FolderCreate):
+    pass
 
 
 class BoardUpdate(BaseModel):

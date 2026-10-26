@@ -1,28 +1,26 @@
-"""Board API and BoardStore tests (WP5)."""
+"""Board API tests against the file library (v2-A)."""
 
 import re
-import sqlite3
 import time
 
 import pytest
 
-from app.db import BoardStore, ConflictError, NotFoundError
 from app.models import MAX_SCENE_BYTES
 
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
-EMPTY = {"type": "chalk/scene", "version": 1, "elements": []}
+EMPTY = {"type": "chalk/scene", "version": 2, "elements": []}
 
 
 def test_create_default(client):
     r = client.post("/api/boards", json={})
     assert r.status_code == 201
     b = r.json()
-    assert b["name"] == "Untitled board"
+    assert b["name"] == "Untitled page"
     assert b["version"] == 1
     assert b["scene"] == EMPTY
     assert len(b["id"]) == 11
     assert ISO_RE.match(b["updatedAt"]) and ISO_RE.match(b["createdAt"])
-    assert set(b) == {"id", "name", "version", "updatedAt", "createdAt", "scene"}
+    assert set(b) == {"id", "name", "version", "updatedAt", "createdAt", "scene", "notebook", "section"}
 
 
 def test_create_named_with_scene(client, scene_with):
@@ -53,7 +51,10 @@ def test_create_422(client, body):
 
 
 def test_list_order(client):
-    ids = [client.post("/api/boards", json={"name": f"b{i}"}).json()["id"] for i in range(3)]
+    ids = []
+    for i in range(3):
+        ids.append(client.post("/api/boards", json={"name": f"b{i}"}).json()["id"])
+        time.sleep(0.01)
     listed = client.get("/api/boards").json()
     assert [b["id"] for b in listed] == ids[::-1]
     assert "scene" not in listed[0]
@@ -83,9 +84,9 @@ def test_put_increments_version(client, scene_with):
     r = client.put(f"/api/boards/{b['id']}", json={"scene": scene, "baseVersion": 1})
     assert r.status_code == 200
     s = r.json()
-    assert set(s) == {"id", "name", "version", "updatedAt"}
+    assert set(s) == {"id", "name", "version", "updatedAt", "notebook", "section"}
     assert s["version"] == 2
-    assert s["name"] == "Untitled board"
+    assert s["name"] == "Untitled page"
     r = client.put(f"/api/boards/{b['id']}", json={"scene": scene, "baseVersion": 2})
     assert r.json()["version"] == 3
     assert client.get(f"/api/boards/{b['id']}").json()["scene"] == scene
@@ -180,46 +181,12 @@ def test_unknown_api_route_json_404(client):
     assert client.post("/api/boards/abcdefgh/extra").status_code == 404
 
 
-# --- BoardStore directly -------------------------------------------------
-
-
-def test_store_persists_across_instances(db_path, scene_with):
-    a = BoardStore(db_path)
-    a.init()
-    created = a.create("Persist", scene_with("p"))
-    b = BoardStore(db_path)
-    b.init()  # idempotent
-    got = b.get(created["id"])
-    assert got is not None
-    assert got["name"] == "Persist"
-    assert got["scene"] == scene_with("p")
-    assert [x["id"] for x in b.list()] == [created["id"]]
-
-
-def test_store_init_creates_parent_dir_and_schema(tmp_path):
-    path = tmp_path / "deep" / "er" / "x.db"
-    s = BoardStore(str(path))
-    s.init()
-    assert path.exists()
-    with sqlite3.connect(path) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
-        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-        names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master")}
-    assert {"boards", "boards_updated_idx"} <= names
-
-
-def test_store_update_errors(store):
-    with pytest.raises(NotFoundError):
-        store.update("nothere", name="x", scene=None, base_version=None)
-    b = store.create("n", {"type": "chalk/scene", "version": 1, "elements": []})
-    with pytest.raises(ConflictError) as ei:
-        store.update(b["id"], name="x", scene=None, base_version=5)
-    assert ei.value.current_version == 1
-    assert store.update(b["id"], name="x", scene=None, base_version=1)["version"] == 2
-    assert store.delete(b["id"]) is True
-    assert store.delete(b["id"]) is False
-    assert store.get(b["id"]) is None
-
-
 def test_health_still_served(client):
     assert client.get("/api/health").json() == {"status": "ok"}
+
+
+def test_create_requires_both_location_parts(client):
+    assert client.post("/api/boards", json={"notebook": "A"}).status_code == 400
+    assert client.post("/api/boards", json={"section": "B"}).status_code == 400
+
+
