@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_STYLE } from '../constants';
 import type { ArrowElement, ChalkElement, ShapeElement, Style, TextElement, ToolId } from '../types';
+import { createInk } from '../core/ink';
 import { getPanelModel } from './stylePanelModel';
 
 function shape(id: string, kind: ShapeElement['shape'] = 'rectangle', style: Partial<Style> = {}): ShapeElement {
@@ -94,5 +95,29 @@ describe('getPanelModel values', () => {
     const els = [shape('a', 'rectangle', { strokeColor: '#2f9e44' }), shape('b', 'rectangle', { strokeColor: '#1971c2' })];
     expect(model(els, ['b', 'a']).values.strokeColor).toBe('#1971c2');
     expect(model(els, ['a', 'b']).values.strokeColor).toBe('#2f9e44');
+  });
+});
+
+describe('getPanelModel with ink and the ink tools', () => {
+  const ink = (id: string, style: Partial<Style> = {}): ChalkElement => ({
+    ...createInk([{ x: 0, y: 0, p: 0.5 }, { x: 10, y: 10, p: 0.5 }], false, { ...DEFAULT_STYLE, ...style }), id,
+  });
+
+  it('is hidden for the pen, eraser and lasso with nothing selected (the tray owns their settings)', () => {
+    for (const tool of ['pen', 'eraser', 'lasso'] as const) expect(model([], [], tool).visible).toBe(false);
+  });
+  it('an ink selection shows stroke colour, pen size, opacity and layers only', () => {
+    const m = model([ink('k')], ['k'], 'pen');
+    expect(m.visible).toBe(true);
+    expect(m.sections).toMatchObject({
+      stroke: true, inkSize: true, opacity: true, layers: true,
+      background: false, fill: false, strokeWidth: false, strokeStyle: false, roughness: false, edges: false,
+      arrowheads: false, fontSize: false, fontFamily: false, textAlign: false,
+    });
+  });
+  it('a mixed selection takes the union and the pen size appears only with ink', () => {
+    const m = model([ink('k'), shape('a')], ['k', 'a']);
+    expect(m.sections).toMatchObject({ inkSize: true, background: true, strokeWidth: true });
+    expect(model([shape('a')], ['a']).sections.inkSize).toBe(false);
   });
 });

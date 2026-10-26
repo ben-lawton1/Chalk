@@ -188,7 +188,7 @@ export type EndpointId = 'start' | 'end';
  */
 export type HandleMode = 'none' | 'box' | 'text' | 'endpoints';
 export type ReorderDir = 'front' | 'back' | 'forward' | 'backward';
-export type ToolId = 'select' | 'hand' | ShapeKind | 'arrow' | 'line' | 'text';
+export type ToolId = 'select' | 'hand' | ShapeKind | 'arrow' | 'line' | 'text' | 'pen' | 'eraser' | 'lasso';
 
 /** One of the three configurable pens. `size` is the stroke width in world px. */
 export interface PenSettings {

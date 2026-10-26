@@ -1,11 +1,13 @@
 // Unit tests for the tools: synthetic PointerInfo against a reset store with an identity viewport (WP3).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ArrowElement, ChalkElement, PointerInfo, ShapeElement, TextElement, Tool } from '../types';
+import type { ArrowElement, ChalkElement, InkElement, PointerInfo, ShapeElement, TextElement, Tool } from '../types';
 import { BIND_GAP, DEFAULT_STYLE } from '../constants';
 import { getState, resetState, setElements, setSelection, setState } from '../state/store';
 import { clearHistory, getHistorySizes } from '../state/history';
 import { undo } from '../state/actions';
+import { createInk } from '../core/ink';
 import { TOOLS } from './index';
+import { isOverSelection } from './select';
 
 interface Mods { shift?: boolean; alt?: boolean; mod?: boolean }
 function pi(x: number, y: number, m: Mods = {}): PointerInfo {
@@ -415,6 +417,203 @@ describe('text tool', () => {
     expect(els()).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pen, eraser and lasso (v3)
+// ---------------------------------------------------------------------------
+
+/** A pen event with explicit coalesced samples. */
+function penInfo(samples: [number, number, number?][], over: Partial<PointerInfo> = {}): PointerInfo {
+  const list = samples.map(([x, y, pressure]) => ({ world: { x, y }, pressure: pressure ?? 0.5 }));
+  const last = list[list.length - 1]!;
+  return { ...pi(last.world.x, last.world.y), pointerType: 'pen', pressure: last.pressure, samples: list, ...over };
+}
+function inks(): InkElement[] {
+  return els().filter((e): e is InkElement => e.type === 'ink');
+}
+
+describe('pen tool', () => {
+  it('draws a stroke from the samples: one ink element, one undo step, nothing selected, tool unchanged', () => {
+    setState({ tool: 'pen' });
+    TOOLS.pen.onPointerDown(penInfo([[100, 100, 0.2]]));
+    expect(getState().interaction.liveInk).not.toBeNull();
+    expect(els()).toHaveLength(0); // the scene only changes on commit
+    TOOLS.pen.onPointerMove(penInfo([[120, 110, 0.4], [140, 130, 0.6]]));
+    expect(getState().interaction.liveInk!.points).toHaveLength(3);
+    TOOLS.pen.onPointerUp(penInfo([[160, 140, 0.8]]));
+    expect(getState().interaction.liveInk).toBeNull();
+    const [k] = inks();
+    expect(inks()).toHaveLength(1);
+    expect([k!.x, k!.y]).toEqual([100, 100]);
+    expect(k!.points.map((q) => q.p)).toEqual([0.2, 0.4, 0.6, 0.8]);
+    expect(k!.pressure).toBe(true);
+    expect(k!.style).toMatchObject({ strokeColor: '#e9ecef', strokeWidth: 3, opacity: 100 });
+    expect(getState().selectedIds).toEqual([]);
+    expect(getState().tool).toBe('pen');
+    expect(getHistorySizes().past).toBe(1);
+    undo();
+    expect(els()).toHaveLength(0);
+  });
+  it('uses the active pen colour and size', () => {
+    setState({ tool: 'pen', activePen: 2 });
+    drag(TOOLS.pen, [[0, 0], [50, 50], [90, 60]]);
+    expect(inks()[0]!.style).toMatchObject({ strokeColor: '#4dabf7', strokeWidth: 5 });
+  });
+  it('real pressure only from a pen; a pressure of 0 at pen-down counts as 0.5', () => {
+    TOOLS.pen.onPointerDown(penInfo([[0, 0, 0]]));
+    TOOLS.pen.onPointerUp(penInfo([[30, 0, 0.9]]));
+    expect(inks()[0]!.points.map((q) => q.p)).toEqual([0.5, 0.9]);
+    resetState();
+    TOOLS.pen.onPointerDown(pi(0, 0));
+    TOOLS.pen.onPointerUp(pi(30, 0));
+    const mouse = inks()[0]!;
+    expect(mouse.pressure).toBe(false);
+    expect(mouse.points.map((q) => q.p)).toEqual([0.5, 0.5]);
+  });
+  it('skips samples closer than INK_MIN_SAMPLE_PX / zoom', () => {
+    setState({ viewport: { scrollX: 0, scrollY: 0, zoom: 2 } });
+    TOOLS.pen.onPointerDown(penInfo([[10, 10]]));
+    TOOLS.pen.onPointerMove(penInfo([[10.2, 10], [10.3, 10.1], [12, 10]])); // 0.375 world px at zoom 2
+    TOOLS.pen.onPointerUp(penInfo([[12, 10]]));
+    expect(inks()[0]!.points).toHaveLength(2);
+  });
+  it('a tap makes a dot', () => {
+    click(TOOLS.pen, 40, 40);
+    expect(inks()).toHaveLength(1);
+    expect(inks()[0]!.points).toHaveLength(1);
+  });
+  it('cancel leaves no trace and no history', () => {
+    TOOLS.pen.onPointerDown(pi(10, 10));
+    TOOLS.pen.onPointerMove(pi(60, 60));
+    TOOLS.pen.onCancel?.();
+    expect(getState().interaction.liveInk).toBeNull();
+    expect(els()).toHaveLength(0);
+    expect(getHistorySizes().past).toBe(0);
+    TOOLS.pen.onPointerUp(pi(70, 70)); // a stray up after cancel is ignored
+    expect(els()).toHaveLength(0);
+  });
+});
+
+describe('eraser tool', () => {
+  const stroke = (id: string): InkElement => ({
+    ...createInk([{ x: 100, y: 200, p: 0.5 }, { x: 300, y: 200, p: 0.5 }], false, { ...DEFAULT_STYLE, strokeWidth: 3 }), id,
+  });
+
+  it('removes the shape and the ink it passes over in one undo step, and undo restores both', () => {
+    seed(rect('r', 100, 100, 100, 60), stroke('k'), rect('far', 600, 600, 50, 50));
+    TOOLS.eraser.onPointerDown(pi(150, 80)); // above the rectangle
+    TOOLS.eraser.onPointerMove(pi(150, 150)); // crosses its top edge
+    TOOLS.eraser.onPointerMove(pi(250, 205)); // lands on the stroke
+    expect(getState().interaction.eraser).toEqual({ x: 250, y: 205 });
+    TOOLS.eraser.onPointerUp(pi(250, 205));
+    expect(els().map((e) => e.id)).toEqual(['far']);
+    expect(getHistorySizes().past).toBe(1);
+    expect(getState().interaction.eraser).toBeNull(); // the tool is not 'eraser' here
+    undo();
+    expect(els().map((e) => e.id)).toEqual(['r', 'k', 'far']);
+  });
+  it('a sweep between two samples still hits (no gaps)', () => {
+    seed(stroke('k'));
+    TOOLS.eraser.onPointerDown(pi(200, 100));
+    TOOLS.eraser.onPointerUp(pi(200, 300)); // jumps over the stroke in one step
+    expect(els()).toHaveLength(0);
+  });
+  it('dragging through the middle of a hollow shape erases nothing', () => {
+    seed(rect('hollow', 100, 100, 300, 300, false));
+    TOOLS.eraser.onPointerDown(pi(200, 200));
+    TOOLS.eraser.onPointerMove(pi(300, 300));
+    TOOLS.eraser.onPointerUp(pi(300, 300));
+    expect(els()).toHaveLength(1);
+    expect(getHistorySizes().past).toBe(0);
+  });
+  it('a filled shape is erased from its inside', () => {
+    seed(rect('filled', 100, 100, 100, 100, true));
+    click(TOOLS.eraser, 150, 150);
+    expect(els()).toHaveLength(0);
+  });
+  it('drops erased ids from the selection and cancel restores everything', () => {
+    seed(rect('a', 0, 0, 100, 100), rect('b', 300, 0, 100, 100));
+    setSelection(['a', 'b']);
+    TOOLS.eraser.onPointerDown(pi(50, 50));
+    expect(getState().selectedIds).toEqual(['b']);
+    TOOLS.eraser.onCancel?.();
+    expect(els().map((e) => e.id)).toEqual(['a', 'b']);
+    expect(getState().selectedIds).toEqual(['a', 'b']);
+    expect(getState().interaction.eraser).toBeNull();
+    expect(getHistorySizes().past).toBe(0);
+  });
+  it('hovering shows the ring without touching anything', () => {
+    seed(rect('a', 0, 0, 100, 100));
+    TOOLS.eraser.onPointerMove(pi(50, 50));
+    expect(getState().interaction.eraser).toEqual({ x: 50, y: 50 });
+    expect(els()).toHaveLength(1);
+  });
+});
+
+describe('lasso tool', () => {
+  it('selects the two elements inside the loop and not the third, without changing the tool', () => {
+    setState({ tool: 'lasso' });
+    seed(rect('a', 50, 50, 80, 80), rect('b', 200, 60, 80, 80), rect('c', 600, 400, 80, 80));
+    drag(TOOLS.lasso, [[10, 10], [350, 10], [350, 200], [10, 200], [12, 12]]);
+    expect(getState().selectedIds).toEqual(['a', 'b']);
+    expect(getState().tool).toBe('lasso');
+    expect(getState().interaction.lasso).toBeNull();
+    expect(getHistorySizes().past).toBe(0); // selecting is not an undo step
+  });
+  it('shows the loop while drawing', () => {
+    TOOLS.lasso.onPointerDown(pi(10, 10));
+    TOOLS.lasso.onPointerMove(pi(100, 10));
+    TOOLS.lasso.onPointerMove(pi(100, 100));
+    expect(getState().interaction.lasso).toHaveLength(3);
+    TOOLS.lasso.onCancel?.();
+    expect(getState().interaction.lasso).toBeNull();
+  });
+  it('skips samples closer than LASSO_MIN_SAMPLE_PX', () => {
+    TOOLS.lasso.onPointerDown(pi(10, 10));
+    TOOLS.lasso.onPointerMove(pi(11, 10));
+    TOOLS.lasso.onPointerMove(pi(12, 11));
+    expect(getState().interaction.lasso).toHaveLength(1);
+    TOOLS.lasso.onCancel?.();
+  });
+  it('a tap clears the selection', () => {
+    seed(rect('a', 50, 50, 80, 80));
+    setSelection(['a']);
+    click(TOOLS.lasso, 500, 500);
+    expect(getState().selectedIds).toEqual([]);
+  });
+  it('selects ink', () => {
+    const k = createInk([{ x: 60, y: 60, p: 0.5 }, { x: 100, y: 80, p: 0.5 }, { x: 120, y: 60, p: 0.5 }], false, DEFAULT_STYLE);
+    seed(k);
+    drag(TOOLS.lasso, [[0, 0], [200, 0], [200, 200], [0, 200]]);
+    expect(getState().selectedIds).toEqual([k.id]);
+  });
+});
+
+describe('select tool: pen and touch hit sizes', () => {
+  const at = (x: number, y: number, pointerType: PointerInfo['pointerType']): PointerInfo => ({ ...pi(x, y), pointerType });
+
+  it('isOverSelection: inside the padded box, on a handle (bigger for touch), else false', () => {
+    seed(rect('a', 100, 100, 100, 100));
+    setSelection(['a']);
+    expect(isOverSelection(at(150, 150, 'pen'))).toBe(true);
+    expect(isOverSelection(at(300, 300, 'pen'))).toBe(false);
+    // the se handle sits at (204, 204); the point 14 px beyond the box edge is out for a mouse and in for a finger
+    expect(isOverSelection(at(214, 214, 'mouse'))).toBe(false);
+    expect(isOverSelection(at(214, 214, 'touch'))).toBe(true);
+    setSelection([]);
+    expect(isOverSelection(at(150, 150, 'pen'))).toBe(false);
+  });
+  it('a touch drag that starts just outside the box resizes through the select tool', () => {
+    seed(rect('a', 100, 100, 100, 100));
+    setSelection(['a']);
+    TOOLS.select.onPointerDown(at(214, 214, 'touch'));
+    TOOLS.select.onPointerMove(at(264, 264, 'touch'));
+    TOOLS.select.onPointerUp(at(264, 264, 'touch'));
+    expect(shapes()[0]!.width).toBeGreaterThan(100);
+    expect(getHistorySizes().past).toBe(1);
+  });
+});
+
 
 // ---------------------------------------------------------------------------
 // Pointer router (input/pointer.ts) against a fake canvas in node

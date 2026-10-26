@@ -22,6 +22,12 @@ function hintFor(s: AppState): string {
       return 'Drag from one shape to another to connect them · Ctrl to avoid connecting';
     case 'text':
       return 'Click anywhere to type';
+    case 'pen':
+      return 'Draw with the pen · Eraser button erases · Barrel button lassos · Finger drags to pan';
+    case 'eraser':
+      return 'Drag across things to erase them · Ctrl+Z brings them back';
+    case 'lasso':
+      return 'Draw a loop around things to select them';
     default:
       return 'Click and drag to draw · Shift for a square · Alt from the center';
   }

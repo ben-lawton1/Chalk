@@ -1,10 +1,13 @@
 // Interactive-layer overlay: hover, selection, handles, bind target, drop preview, marquee, all in screen space (WP2).
 import type { ChalkElement, Interaction, Outline, Rect, Viewport } from '../types';
-import { CANVAS_BACKGROUND, ENDPOINT_RADIUS_PX, HANDLE_SIZE_PX, SELECTION_COLOR, SELECTION_PADDING_PX } from '../constants';
+import {
+  CANVAS_BACKGROUND, ENDPOINT_RADIUS_PX, ERASER_RADIUS_PX, HANDLE_SIZE_PX, SELECTION_COLOR, SELECTION_PADDING_PX,
+} from '../constants';
 import { worldToScreen } from '../core/viewport';
 import { SHAPES } from '../core/shapes';
 import { getBounds, getHandleMode, getHandlePositions, getOutline, getSelectionBox, isBindable } from '../core/geometry';
 import { indexById } from '../core/binding';
+import { drawInk } from './ink';
 
 export interface OverlayInput {
   elements: readonly ChalkElement[]; selectedIds: readonly string[]; viewport: Viewport;
@@ -12,6 +15,7 @@ export interface OverlayInput {
 }
 
 const MARQUEE_FILL = 'rgba(63,185,132,0.10)';
+const LASSO_FILL = 'rgba(63,185,132,0.08)';
 
 /** Rect in world units to a screen-space rect. */
 function toScreenRect(r: Rect, v: Viewport): Rect {
@@ -156,7 +160,49 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, input: OverlayInput):
     ctx.restore();
   }
 
-  // 5. Marquee.
+  // 5. Stroke in progress (world space, like the static layer).
+  const live = interaction.liveInk;
+  if (live) {
+    ctx.save();
+    ctx.setTransform(dpr * v.zoom, 0, 0, dpr * v.zoom, dpr * v.zoom * v.scrollX, dpr * v.zoom * v.scrollY);
+    drawInk(ctx, live);
+    ctx.restore();
+  }
+
+  // 6. Lasso and eraser ring.
+  const lasso = interaction.lasso;
+  if (lasso && lasso.length > 1) {
+    ctx.save();
+    ctx.beginPath();
+    lasso.forEach((pt, i) => {
+      const s = worldToScreen(pt, v);
+      if (i === 0) ctx.moveTo(s.x, s.y);
+      else ctx.lineTo(s.x, s.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = LASSO_FILL;
+    ctx.fill();
+    ctx.strokeStyle = SELECTION_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.restore();
+  }
+  const eraser = interaction.eraser;
+  if (eraser) {
+    const c = worldToScreen(eraser, v);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, ERASER_RADIUS_PX, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(233,236,239,0.10)';
+    ctx.fill();
+    ctx.strokeStyle = '#e9ecef';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 7. Marquee.
   const m = interaction.marquee;
   if (m) {
     const r = toScreenRect(m, v);

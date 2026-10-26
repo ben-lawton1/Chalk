@@ -7,6 +7,7 @@ import { expandRect, rectsIntersect } from '../core/math';
 import { visibleWorldRect } from '../core/viewport';
 import { getBounds } from '../core/geometry';
 import { layoutText } from '../core/text';
+import { drawInk } from './ink';
 import { drawOrigin, getDrawables } from './roughShapes';
 
 export interface SceneRenderOptions {
@@ -92,7 +93,9 @@ function drawElement(ctx: CanvasRenderingContext2D, rc: RoughCanvas, el: ChalkEl
   ctx.save();
   try {
     ctx.globalAlpha = alpha;
-    if (el.type !== 'text') {
+    if (el.type === 'ink') {
+      drawInk(ctx, el);
+    } else if (el.type !== 'text') {
       const origin = drawOrigin(el);
       ctx.translate(origin.x, origin.y);
       for (const d of getDrawables(el)) rc.draw(d);

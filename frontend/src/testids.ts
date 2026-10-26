@@ -114,3 +114,5 @@ export const tidRowRename = (key: string): string => `row-rename-${key}`;
 export const tidRowDelete = (key: string): string => `row-delete-${key}`;
 /** The + button of a notebook (adds a section) or section (adds a page). */
 export const tidRowAdd = (key: string): string => `row-add-${key}`;
+/** Pen size button in the style panel (ink selected), by index into PEN_SIZES. */
+export const tidInkSize = (index: number): string => `style-inksize-${index}`;

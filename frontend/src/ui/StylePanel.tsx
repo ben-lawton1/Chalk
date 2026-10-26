@@ -1,12 +1,12 @@
 // Style panel: color swatches, fill/stroke/font/arrowhead options, opacity and layer actions. Owner: WP4.
 import type { ReactNode } from 'react';
 import {
-  ARROWHEADS, BACKGROUND_COLORS, EDGES, FILL_STYLES, FONT_FAMILIES, FONT_SIZES, FONT_STACKS, ROUGHNESS_LEVELS,
+  ARROWHEADS, BACKGROUND_COLORS, EDGES, FILL_STYLES, FONT_FAMILIES, FONT_SIZES, FONT_STACKS, PEN_SIZES, ROUGHNESS_LEVELS,
   STROKE_COLORS, STROKE_STYLES, STROKE_WIDTHS, TEXT_ALIGNS,
 } from '../constants';
 import { applyStyle, deleteSelection, duplicateSelection, reorderSelection } from '../state/actions';
 import {
-  TID, tidAlign, tidBg, tidEdges, tidEndHead, tidFill, tidFont, tidFontSize, tidRoughness, tidStartHead, tidStroke,
+  TID, tidAlign, tidBg, tidEdges, tidEndHead, tidFill, tidFont, tidFontSize, tidInkSize, tidRoughness, tidStartHead, tidStroke,
   tidStrokeStyle, tidWidth,
 } from '../testids';
 import type { Arrowhead, ReorderDir, Style } from '../types';
@@ -156,6 +156,20 @@ export function StylePanel() {
               value={isHex(v.strokeColor) ? v.strokeColor : '#e9ecef'}
               onChange={(e) => applyStyle({ strokeColor: e.target.value }, 'stroke-custom')}
             />
+          </div>
+        </Section>
+      )}
+
+      {sec.inkSize && (
+        <Section label="Pen size">
+          <div className="panel-row">
+            {PEN_SIZES.map((w, i) => (
+              <Opt key={w} testId={tidInkSize(i)} pressed={v.strokeWidth === w} title={`Pen size ${w}`} onClick={() => applyStyle({ strokeWidth: w })}>
+                <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+                  <circle cx="10" cy="10" r={Math.min(8, 1 + w * 0.55)} fill="currentColor" />
+                </svg>
+              </Opt>
+            ))}
           </div>
         </Section>
       )}

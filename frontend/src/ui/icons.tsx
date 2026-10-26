@@ -4,7 +4,7 @@ import { SHAPES, isShapeKind } from '../core/shapes';
 
 export type IconName = 'hand' | 'select' | 'arrow' | 'line' | 'text' | 'lock' | 'unlock' | 'undo' | 'redo' | 'menu'
   | 'help' | 'zoomIn' | 'zoomOut' | 'fit' | 'trash' | 'duplicate' | 'front' | 'back' | 'forward' | 'backward' | 'close' | 'home'
-  | 'sidebar' | 'chevron' | 'notebook' | 'plus' | 'more' | 'pencil';
+  | 'sidebar' | 'chevron' | 'notebook' | 'plus' | 'more' | 'pencil' | 'pen' | 'eraser' | 'lasso';
 
 /** SVG path data per icon, drawn with a 1.75px round stroke in a 24x24 box. */
 const PATHS: Record<IconName, string> = {
@@ -36,6 +36,9 @@ const PATHS: Record<IconName, string> = {
   plus: 'M12 5v14 M5 12h14',
   more: 'M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
   pencil: 'M4 20l1-4L16 5l3 3L8 19z M14 7l3 3',
+  pen: 'M12 3l5 6-3 8h-4L7 9z M12 17v4 M12 11v.01 M12 3v6',
+  eraser: 'M5.5 14.5l8-8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19H8l-2.5-2.7a1.4 1.4 0 0 1 0-1.8z M10 10l5 5 M13 19h7',
+  lasso: 'M12 4c-4.4 0-8 1.8-8 4.2S7.6 12.4 12 12.4s8-1.8 8-4.2S16.4 4 12 4z M8.5 12c-1 2.2-.5 4 1.5 5 1.4.7 1.5 2 .5 3',
 };
 
 function Svg(props: { d: string; size: number }) {

@@ -1,6 +1,9 @@
 // Select tool: click/shift/marquee selection, move, 8-handle resize, endpoint drag, Alt-duplicate (WP3).
 import type { ArrowElement, ChalkElement, EndpointId, HandleId, PointerInfo, Point, Snapshot, Tool } from '../types';
-import { ANGLE_SNAP_DEG, DRAG_THRESHOLD_PX, SELECTION_PADDING_PX } from '../constants';
+import {
+  ANGLE_SNAP_DEG, DRAG_THRESHOLD_PX, ENDPOINT_HIT_PX, HANDLE_HIT_PX, HIT_TOLERANCE_PX, PEN_HANDLE_HIT_PX, SELECTION_PADDING_PX,
+  TOUCH_HANDLE_HIT_PX, TOUCH_HIT_TOLERANCE_PX,
+} from '../constants';
 import { add, dist, expandRect, rectContainsPoint, rectFromPoints, snapAngle, sub } from '../core/math';
 import {
   elementsInRect, getHandleMode, getSelectionBox, handlePoint, HANDLE_CURSORS, hitEndpoint, hitHandle, hitTest, isBindable,
@@ -31,30 +34,65 @@ function activeSelection(): string[] {
   return editingId ? s.selectedIds.filter((id) => id !== editingId) : [...s.selectedIds];
 }
 
-function insidePaddedSelection(elements: readonly ChalkElement[], sel: readonly string[], world: Point, zoom: number): boolean {
+/** Handle hit size (screen px): fingers and pen tips need more room than a mouse. */
+function handlePx(p: PointerInfo): number {
+  return p.pointerType === 'touch' ? TOUCH_HANDLE_HIT_PX : p.pointerType === 'pen' ? PEN_HANDLE_HIT_PX : HANDLE_HIT_PX;
+}
+/** Arrow-end hit radius (screen px), the same idea. */
+function endpointPx(p: PointerInfo): number {
+  return Math.max(ENDPOINT_HIT_PX, handlePx(p) / 2);
+}
+function hitTolerancePx(p: PointerInfo): number {
+  return p.pointerType === 'touch' ? TOUCH_HIT_TOLERANCE_PX : HIT_TOLERANCE_PX;
+}
+/** How far the selection box reaches beyond its edge (screen px). */
+function boxPaddingPx(p: PointerInfo): number {
+  return p.pointerType === 'touch' ? TOUCH_HIT_TOLERANCE_PX : SELECTION_PADDING_PX;
+}
+
+function insidePaddedSelection(elements: readonly ChalkElement[], sel: readonly string[], p: PointerInfo, zoom: number): boolean {
   const box = getSelectionBox(elements, sel);
-  return box !== null && rectContainsPoint(expandRect(box, SELECTION_PADDING_PX / zoom), world);
+  return box !== null && rectContainsPoint(expandRect(box, boxPaddingPx(p) / zoom), p.world);
+}
+
+/**
+ * Is the pointer on a handle or endpoint of the current selection, or inside its padded box? The pointer router uses it to
+ * let the pen tip, the eraser and a finger move or resize a selection instead of drawing, erasing or panning.
+ */
+export function isOverSelection(p: PointerInfo): boolean {
+  const s = getState();
+  const sel = activeSelection();
+  if (sel.length === 0) return false;
+  const mode = getHandleMode(s.elements, sel);
+  if (mode === 'endpoints') {
+    const a = getElement(s.elements, sel[0]!);
+    if (a && a.type === 'arrow' && hitEndpoint(a, p.screen, s.viewport, endpointPx(p))) return true;
+  } else if (mode === 'box' || mode === 'text') {
+    const box = getSelectionBox(s.elements, sel);
+    if (box && hitHandle(box, p.screen, s.viewport, mode, handlePx(p))) return true;
+  }
+  return insidePaddedSelection(s.elements, sel, p, s.viewport.zoom);
 }
 
 function hover(p: PointerInfo): void {
   const s = getState();
   const { viewport: v, elements } = s;
   const sel = activeSelection();
-  const hit = hitTest(elements, p.world, v.zoom);
+  const hit = hitTest(elements, p.world, v.zoom, hitTolerancePx(p));
   let cursor: string | null = null;
   const mode = getHandleMode(elements, sel);
   if (mode === 'endpoints') {
     const a = getElement(elements, sel[0]!);
-    if (a && a.type === 'arrow' && hitEndpoint(a, p.screen, v)) cursor = 'pointer';
+    if (a && a.type === 'arrow' && hitEndpoint(a, p.screen, v, endpointPx(p))) cursor = 'pointer';
   } else if (mode === 'box' || mode === 'text') {
     const box = getSelectionBox(elements, sel);
-    const h = box ? hitHandle(box, p.screen, v, mode) : null;
+    const h = box ? hitHandle(box, p.screen, v, mode, handlePx(p)) : null;
     if (h) cursor = HANDLE_CURSORS[h];
   }
   if (cursor === null) {
     if (hit) {
       if (!hit.hollow || sel.includes(hit.element.id)) cursor = 'move';
-    } else if (sel.length >= 1 && !p.shift && insidePaddedSelection(elements, sel, p.world, v.zoom)) {
+    } else if (sel.length >= 1 && !p.shift && insidePaddedSelection(elements, sel, p, v.zoom)) {
       cursor = 'move';
     }
   }
@@ -119,21 +157,21 @@ export const selectTool: Tool = {
     const mode = getHandleMode(base, sel);
     if (mode === 'endpoints') {
       const a = getElement(base, sel[0]!);
-      const which = a && a.type === 'arrow' ? hitEndpoint(a, p.screen, v) : null;
+      const which = a && a.type === 'arrow' ? hitEndpoint(a, p.screen, v, endpointPx(p)) : null;
       if (a && which) {
         gesture = { kind: 'endpoint', arrowId: a.id, which, before, base };
         return;
       }
     } else if (mode === 'box' || mode === 'text') {
       const box = getSelectionBox(base, sel);
-      const h = box ? hitHandle(box, p.screen, v, mode) : null;
+      const h = box ? hitHandle(box, p.screen, v, mode, handlePx(p)) : null;
       if (box && h) {
         gesture = { kind: 'resize', handle: h, grab: sub(handlePoint(box, h), p.world), before, base, ids: [...sel] };
         return;
       }
     }
 
-    const hit = hitTest(base, p.world, zoom);
+    const hit = hitTest(base, p.world, zoom, hitTolerancePx(p));
     if (hit && (!hit.hollow || sel.includes(hit.element.id))) {
       const id = hit.element.id;
       const isSel = sel.includes(id);
@@ -155,7 +193,7 @@ export const selectTool: Tool = {
       gesture = { kind: 'pendingHollow', downScreen, downWorld, hitId: hit.element.id, shift: p.shift };
       return;
     }
-    if (sel.length >= 1 && !p.shift && insidePaddedSelection(base, sel, p.world, zoom)) {
+    if (sel.length >= 1 && !p.shift && insidePaddedSelection(base, sel, p, zoom)) {
       gesture = { kind: 'pending', downScreen, downWorld, before, base, ids: [...sel], collapseTo: null, toggleOff: null };
       return;
     }

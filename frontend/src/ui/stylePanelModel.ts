@@ -5,18 +5,23 @@ export interface PanelSections {
   stroke: boolean; background: boolean; fill: boolean; strokeWidth: boolean; strokeStyle: boolean;
   roughness: boolean; edges: boolean; arrowheads: boolean; fontSize: boolean; fontFamily: boolean; textAlign: boolean;
   opacity: boolean; layers: boolean;
+  /** Ink pen size (sets strokeWidth from PEN_SIZES). */
+  inkSize: boolean;
 }
 export interface PanelModel { visible: boolean; sections: PanelSections; values: Style }
 
 const NO_SECTIONS: PanelSections = {
   stroke: false, background: false, fill: false, strokeWidth: false, strokeStyle: false,
   roughness: false, edges: false, arrowheads: false, fontSize: false, fontFamily: false, textAlign: false,
-  opacity: false, layers: false,
+  opacity: false, layers: false, inkSize: false,
 };
 
-/** Same rule as tools/index.isDrawingTool, kept local so this module stays free of the tool graph. */
+/**
+ * Same rule as tools/index.isDrawingTool, kept local so this module stays free of the tool graph. The pen, eraser and lasso
+ * are not drawing tools here: the pen tray owns their settings.
+ */
 function isDrawing(tool: ToolId): boolean {
-  return tool !== 'select' && tool !== 'hand';
+  return tool !== 'select' && tool !== 'hand' && tool !== 'pen' && tool !== 'eraser' && tool !== 'lasso';
 }
 
 export function getPanelModel(s: Pick<AppState, 'elements' | 'selectedIds' | 'tool' | 'currentStyle'>): PanelModel {
@@ -35,11 +40,13 @@ export function getPanelModel(s: Pick<AppState, 'elements' | 'selectedIds' | 'to
   let rect = false;
   let arrow = false;
   let text = false;
+  let ink = false;
   if (hasSelection) {
     for (const el of selected) {
       if (el.type === 'shape') { shape = true; if (el.shape === 'rectangle') rect = true; }
       else if (el.type === 'arrow') arrow = true;
       else if (el.type === 'text') text = true;
+      else if (el.type === 'ink') ink = true;
     }
   } else if (s.tool === 'arrow' || s.tool === 'line') {
     arrow = true;
@@ -52,6 +59,7 @@ export function getPanelModel(s: Pick<AppState, 'elements' | 'selectedIds' | 'to
 
   const sections: PanelSections = {
     stroke: true,
+    inkSize: ink,
     background: shape,
     fill: shape,
     strokeWidth: shape || arrow,

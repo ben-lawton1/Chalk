@@ -26,8 +26,9 @@ let clipboardBuffer: string | null = null;
 export function setTool(tool: ToolId): void {
   commitEditing();
   setState({ tool });
-  // Written inline: state/* may not import tools/* (§4.2). Drawing tools = everything but select and hand.
-  if (tool !== 'select' && tool !== 'hand') setSelection([]);
+  // Written inline: state/* may not import tools/* (§4.2). Drawing tools = everything but select, hand and the ink tools
+  // (a lasso selection must survive a switch to the pen, whose tip then moves it).
+  if (tool !== 'select' && tool !== 'hand' && tool !== 'pen' && tool !== 'eraser' && tool !== 'lasso') setSelection([]);
   setInteraction({ hoverId: null, bindTarget: null, cursor: null, dropPreview: null });
 }
 
