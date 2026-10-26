@@ -155,6 +155,24 @@ Everything numeric lives in `constants.ts`, with units in the comments: drag thr
 
 The pen and touch feel is in the same file. `INK_THINNING`, `INK_SMOOTHING` and `INK_STREAMLINE` shape the ink (how much pressure thins the line, how much the outline is smoothed and the input streamlined) and `INK_MIN_SAMPLE_PX` skips redundant samples. `ERASER_RADIUS_PX`, `LASSO_MIN_INSIDE` (how much of an element must be inside the loop) and `LASSO_MIN_SAMPLE_PX` tune the eraser and lasso. `TOUCH_TAP_SLOP_PX`, `TOUCH_TAP_MAX_MS`, `DOUBLE_TAP_MS` and `DOUBLE_TAP_SLOP_PX` define a tap and a double tap; `TOUCH_HIT_TOLERANCE_PX`, `TOUCH_HANDLE_HIT_PX` and `PEN_HANDLE_HIT_PX` make fingers and pens easier to aim; `PALM_GRACE_MS` is how long a finger is ignored after the pen leaves. `PEN_COLORS`, `PEN_SIZES` and `DEFAULT_PENS` set what the pen tray offers.
 
+### Terminal panel (v4)
+
+The terminal is a dock panel (`ui/terminal/`) talking to the host bridge (`bridge/`, Go) over a WebSocket. Pieces:
+
+- `ui/terminal/session.ts`: `TerminalSession`, the WebSocket client (binary frames = raw PTY bytes both ways; text frames are JSON: `resize` out, `exit` and `error` in). It takes a socket factory so `session.test.ts` drives it with a fake socket. No React, no xterm.
+- `ui/terminal/prefs.ts`: `localStorage['chalk:terminal']` = `{open, height}` (always try/catch) and the height clamp (120 px to 70% of the window).
+- `ui/terminal/terminalStore.ts`: its own tiny store (not `AppState`: sessions and xterm instances are not serializable and must outlive page switches). It owns the tabs, the bridge status (`/health`, `/profiles`; polling every 3 s while the panel is open and the bridge offline), the xterm instances (one hidden `.terminal-host` div per tab, so hiding the panel or switching tabs never loses output) and the `--terminal-h` CSS variable on `<html>` (0px when hidden).
+- `ui/terminal/TerminalPanel.tsx`: the button and the panel (tab strip, profile menu, resize grip, offline and "process exited" overlays), read through `useSyncExternalStore`.
+- xterm (`@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`) is imported dynamically the first time a session is created, so it is a separate chunk. It uses the DOM renderer, so the e2e suite reads `.xterm-rows`.
+- Layout: `.stage` has `bottom: var(--terminal-h)` and every bottom-anchored island adds `var(--terminal-h)` to its offset. A new bottom-anchored element must do the same.
+- Keys: `input/keyboard.ts` handles only Ctrl+\` (it dispatches the window event `TERMINAL_TOGGLE_EVENT`; `input/` may not import `ui/`). For any target inside `.terminal-panel`, Ctrl+S, Ctrl+=, Ctrl+-, Ctrl+0 and all plain keys are left alone; Ctrl+C copies via a hidden textarea when text is selected (`navigator.clipboard` does not exist on the e2e origin).
+- Folder rule: `ui/terminal/` may import anything below `ui/`, but `session.ts` and `prefs.ts` stay free of React and xterm so they remain unit-testable in plain node. Only `terminalStore.ts` touches xterm.
+- The bridge URL comes from `GET /api/config` (`terminalUrl`, env `CHALK_TERMINAL_URL`). The e2e suite points it at the `term-test` service, whose only profile is the Linux `shell`.
+
+### Add a built-in terminal profile
+
+Profiles are decided by the bridge, never by the browser (the browser only sends an id). Edit `bridge/profiles.go`: add an entry to the list returned for the platform (`id`, `Name`, `Command`, `Args`, `Cwd`) and a case to the profile tests. The panel needs no change: `/profiles` feeds the `▾` menu. A personal profile that does not belong in the repo goes in `%USERPROFILE%\.chalk\terminal.json` instead (see the README).
+
 ## Testing your change
 
 ```sh

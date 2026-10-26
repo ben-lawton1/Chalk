@@ -82,11 +82,14 @@ Press `?` in the app for the full list. The essentials:
 | `Shift+1` / `Shift+2` | Zoom to fit everything / to the selection |
 | `Home` | Back to the top-left of the page at 100% |
 | `Ctrl+\` | Show or hide the sidebar |
+| `` Ctrl+` `` | Show or hide the terminal |
 | `Ctrl+S` | Save now (autosave runs anyway) |
 
 ## Terminal
 
-Chalk can show a real terminal (PowerShell, WSL, or anything you configure, such as `ssh`) in a panel at the bottom of the window. A browser page and a Docker container can't start processes on your PC, so a small helper program, the **terminal bridge** (`chalk-terminal`, written in Go, source in `bridge/`), runs on Windows and connects the panel to a pseudo-terminal. The panel itself (a terminal button at the top right, Ctrl+`) arrives with the next part of v4; this section is about the bridge.
+Chalk can show a real terminal (PowerShell, WSL, or anything you configure, such as `ssh`) in a panel at the bottom of the window. A browser page and a Docker container can't start processes on your PC, so a small helper program, the **terminal bridge** (`chalk-terminal`, written in Go, source in `bridge/`), runs on Windows and connects the panel to a pseudo-terminal. The first part of this section describes the panel in Chalk; the rest is about the bridge.
+
+**Using the panel.** Click the terminal button at the top right of the window, or press `` Ctrl+` `` from anywhere (also from inside the terminal), to show or hide a panel docked at the bottom of the canvas. Opening it with no session starts the default profile (PowerShell on Windows). Drag its top edge to resize it (between 120 px and 70% of the window); the size and open state are remembered. Each session is a tab with a × to close it; `+` opens another session with the default profile, and `▾` lists every profile so you can pick one (for example WSL or an ssh profile from `terminal.json`). The right-hand buttons hide the panel (sessions keep running, and keep their output) and kill all sessions. Sessions survive switching pages; reloading the browser tab ends them. When a shell exits, its tab stays with "[process exited with code N]" and a Restart button. Inside the panel every key goes to the shell (Esc works in vim, `Ctrl+S` and `Ctrl+=` are not Chalk shortcuts there); `Ctrl+C` copies when text is selected and otherwise interrupts, and `Ctrl+V` pastes. If the helper isn't running, the panel says so, shows the command to start it and a Retry button, and checks again every 3 seconds on its own.
 
 **Build it** (Docker only; the Go toolchain never touches your PC). It is built locally from this source, so Windows SmartScreen has nothing to flag:
 
