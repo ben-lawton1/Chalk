@@ -298,3 +298,96 @@ export function nearRect(actual: R | { x: number; y: number; width: number; heig
   near(actual.width, expected.width, tol);
   near(actual.height, expected.height, tol);
 }
+
+// ---------------------------------------------------------------------------
+// Synthetic pen and touch input (Playwright's mouse cannot produce pointerType 'pen' or 'touch')
+// ---------------------------------------------------------------------------
+
+export interface PtrOpts {
+  pointerType?: 'mouse' | 'pen' | 'touch';
+  pointerId?: number;
+  pressure?: number;
+  button?: number;
+  buttons?: number;
+}
+export type PtrType = 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'pointerover' | 'pointerleave';
+export interface PtrEvent extends PtrOpts { type: PtrType; x: number; y: number }
+
+/** Dispatches PointerEvents on the interactive canvas, in order, in ONE page task (so gestures take no real time). */
+export function ptrEvents(page: Page, events: PtrEvent[]): Promise<void> {
+  return page.evaluate((list) => {
+    const canvas = document.querySelector('[data-testid="canvas-interactive"]')!;
+    for (const e of list) {
+      canvas.dispatchEvent(
+        new PointerEvent(e.type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          clientX: e.x,
+          clientY: e.y,
+          pointerId: e.pointerId ?? 1,
+          pointerType: e.pointerType ?? 'mouse',
+          isPrimary: true,
+          pressure: e.pressure ?? (e.type === 'pointerup' || e.type === 'pointerleave' ? 0 : 0.5),
+          button: e.button ?? 0,
+          buttons: e.buttons ?? (e.type === 'pointerup' || e.type === 'pointerleave' ? 0 : 1),
+        }),
+      );
+    }
+  }, events);
+}
+
+/** A pen or touch drag through `pts`: down at the first point, moves through the rest, up at the last. */
+export function ptrDrag(
+  page: Page,
+  pts: P[],
+  o: PtrOpts & { downButton?: number; heldButtons?: number } = {},
+): Promise<void> {
+  const { downButton, heldButtons, ...base } = o;
+  const held = heldButtons ?? 1;
+  const first = pts[0]!;
+  const lastPt = pts[pts.length - 1]!;
+  return ptrEvents(page, [
+    { type: 'pointerdown', ...first, ...base, button: downButton ?? 0, buttons: held },
+    ...pts.slice(1).map((p): PtrEvent => ({ type: 'pointermove', ...p, ...base, button: -1, buttons: held })),
+    { type: 'pointerup', ...lastPt, ...base, button: downButton ?? 0, buttons: 0 },
+  ]);
+}
+
+/** The pen tip, with pressure rising along the stroke. */
+export function penStroke(page: Page, pts: P[], pressure = 0.6): Promise<void> {
+  return ptrDrag(page, pts, { pointerType: 'pen', pointerId: 7, pressure });
+}
+/** Holding the pen's eraser button (button 5, buttons 32). */
+export function penEraserDrag(page: Page, pts: P[]): Promise<void> {
+  return ptrDrag(page, pts, { pointerType: 'pen', pointerId: 7, downButton: 5, heldButtons: 32 });
+}
+/** Holding the pen's barrel button (button 2, buttons 2): a lasso. */
+export function penBarrelDrag(page: Page, pts: P[]): Promise<void> {
+  return ptrDrag(page, pts, { pointerType: 'pen', pointerId: 7, downButton: 2, heldButtons: 2 });
+}
+/** One finger drag. */
+export function fingerDrag(page: Page, pts: P[], pointerId = 21): Promise<void> {
+  return ptrDrag(page, pts, { pointerType: 'touch', pointerId });
+}
+/** `count` quick taps with one finger at p (2 = a double tap). */
+export function fingerTap(page: Page, p: P, count = 1): Promise<void> {
+  const events: PtrEvent[] = [];
+  for (let i = 0; i < count; i++) {
+    events.push({ type: 'pointerdown', ...p, pointerType: 'touch', pointerId: 21 + i });
+    events.push({ type: 'pointerup', ...p, pointerType: 'touch', pointerId: 21 + i });
+  }
+  return ptrEvents(page, events);
+}
+/** Two fingers: both go down at a0/b0, move together to a1/b1 and lift. */
+export function pinch(page: Page, a0: P, b0: P, a1: P, b1: P): Promise<void> {
+  const t = { pointerType: 'touch' } as const;
+  return ptrEvents(page, [
+    { type: 'pointerdown', ...a0, ...t, pointerId: 31 },
+    { type: 'pointerdown', ...b0, ...t, pointerId: 32 },
+    { type: 'pointermove', ...a1, ...t, pointerId: 31 },
+    { type: 'pointermove', ...b1, ...t, pointerId: 32 },
+    { type: 'pointerup', ...a1, ...t, pointerId: 31 },
+    { type: 'pointerup', ...b1, ...t, pointerId: 32 },
+  ]);
+}

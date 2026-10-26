@@ -32,9 +32,31 @@ Check that the server is up: <http://localhost:8080/api/health> returns `{"statu
 - **Style:** stroke and background color (palette or custom), fill style, stroke width and style, sloppiness, edges, opacity, font size and family, text alignment and arrowheads. Styles are sticky: they apply to the selection and become the defaults for the next shape.
 - **Pages with a home corner:** like a OneNote page, the canvas starts at its top-left corner and extends without limit to the right and down. You can't scroll above or left of it. New pages open at 100% in that corner; `Home` (or the house button) takes you back. Pan with the wheel, Shift+wheel, Space+drag, middle mouse or the hand tool; zoom with Ctrl+wheel, the buttons or the keys; zoom to fit, zoom to selection, and a "Back to content" button.
 - **Notebooks, sections and pages:** the left sidebar shows your library as a tree (`Ctrl+\` hides it). Add, rename and delete notebooks, sections and pages from it; deleting needs a second click to confirm. Every page saves automatically, and the view of each page is remembered. If a page is changed somewhere else you get a conflict banner (Reload or Keep mine), and unsaved work is also backed up in the browser and restored after a crash or a lost connection.
+- **Pen and touch:** a stylus draws pressure-sensitive ink (the Pen button opens a tray with 3 pens, each with its own colour and size, plus an eraser and a lasso). The pen's eraser button erases and its barrel button lassos, like OneNote. A finger pans, two fingers pinch-zoom, a tap selects and a double tap edits; a resting palm is ignored. See [Pen and touch](#pen-and-touch).
 - **Dark theme:** a dark canvas, white strokes by default and a restrained green accent.
 - **Undo and redo** for every change, with merged slider and nudge steps.
 - **Files:** export and import `.chalk.json`, and export a crisp 2x PNG on the dark page background.
+
+### Pen and touch
+
+Meant for a touchscreen laptop with a stylus (written for a Lenovo Yoga 9i and an MPP-style pen), in Edge or Chrome.
+
+| Input | What it does |
+|---|---|
+| Pen tip | Draws with the current tool. With the Pen tool: ink, with the pressure of the pen. Inside a selection it moves or resizes it instead. |
+| Pen, eraser button held, drag | Erases every shape, text, arrow and stroke the ring passes over (one undo step) |
+| Pen, barrel button held, drag | Lasso: draw a loop and everything mostly inside it is selected; then move, delete, duplicate, style or copy it as usual |
+| Finger, drag | Pans the page, with any tool (a finger never draws). Dragging on the selection moves or resizes it |
+| Two fingers, pinch | Zoom |
+| Tap | Select the element (or clear the selection) |
+| Double tap | Edit a shape's label or a text; on empty canvas, write new text |
+| `P` / `E` | Pen / eraser |
+
+The **Pen** button in the toolbar opens the pen tray: three pens, an eraser and a lasso. Click the active pen again for its colour and size (they apply to new strokes only and are remembered). The lasso chip does the same as the barrel button, for mouse and touch.
+
+A hand resting on the screen is ignored while the pen is touching or hovering, and for half a second after it leaves. If a pan or pinch started just before the pen arrived, it is undone.
+
+**If the pen buttons do the wrong thing on Windows:** open Settings, Bluetooth & devices, Pen & Windows Ink, and check the Lenovo Pen Settings app. The shortcuts must be left as "Eraser" for the eraser button and "Right-click" for the barrel button, not remapped to apps. If the two are simply reversed on your pen, open the pen options (click the active pen in the tray) and tick **Swap pen buttons**.
 
 ### Keyboard shortcuts
 
@@ -45,6 +67,7 @@ Press `?` in the app for the full list. The essentials:
 | `V` / `H` | Select / hand (pan) |
 | `R` `D` `O` `5` | Rectangle, diamond, ellipse, triangle (or `2` `3` `4` `5`) |
 | `A` / `L` / `T` | Arrow / line / text (or `6` `7` `8`) |
+| `P` / `E` | Pen / eraser |
 | `Q` | Keep the tool after drawing (lock) |
 | Double-click, `Enter` | Edit text or label (double-click on empty canvas: new text) |
 | `Esc`, `Ctrl+Enter` | Finish editing / cancel / clear selection |
@@ -108,11 +131,11 @@ backend/app/        FastAPI app: models.py (API contract), library.py (the folde
 backend/tests/      pytest
 frontend/src/
   types.ts, constants.ts, testids.ts     shared contracts
-  core/        pure TypeScript: geometry, arrow binding, scene operations, text layout, serialization
+  core/        pure TypeScript: geometry, arrow binding, scene operations, text layout, ink, serialization
   state/       the store, undo history and the command layer (actions.ts)
-  render/      canvas drawing (rough.js), selection overlay, PNG/JSON export
-  tools/       one gesture state machine per tool (select, shape, arrow, text, hand)
-  input/       pointer router, keyboard shortcuts, clipboard
+  render/      canvas drawing (rough.js, perfect-freehand for ink), selection overlay, PNG/JSON export
+  tools/       one gesture state machine per tool (select, shape, arrow, text, hand, pen, eraser, lasso)
+  input/       pointer router (mouse, pen buttons, palm rejection), touch gestures, keyboard shortcuts, clipboard
   persistence/ API client, board lifecycle, autosave and conflict handling, local backup
   ui/          the React chrome (toolbar, style panel, menus, dialogs, text editor)
   testing/     the window.__CHALK__ hook used by the e2e suite
@@ -130,7 +153,8 @@ These are deliberate omissions for a first version. Each has a clear seam, so yo
 |---|---|---|
 | Rotation | Multiplies the cost of hit testing, resize, binding and the text overlay. Not requested. | Add `angle` plus `MIGRATIONS[2]`; the geometry functions all take an element. |
 | Multi-point, curved or elbow arrows | Straight connectors cover "connect boxes". | `ArrowElement.via?: Point[]`; `resolveArrow` uses the first and last segments. |
-| Freehand pen and eraser | Needs perfect-freehand and a new element type. | A new tool file plus a new element type. |
+| Point eraser, highlighter, pen tilt, ruler | The eraser removes whole strokes; the pen has no highlighter mode. | `tools/eraser.ts` (split `InkElement.points`), a pen kind in `PenSettings`. |
+| Typed note-taking | The next feature. | A flowing text element beside the free-placed `text` one. |
 | Groups and frames | Bookkeeping that would bloat the core. | `groupIds`, and selection expansion in `tools/select.ts`. |
 | Images and embeds | Needs blob storage. | `/api/files` plus an `image` element. |
 | Real-time collaboration, auth | This is a local single-user app. | Per-element version fields, a WebSocket route. |
@@ -139,7 +163,7 @@ These are deliberate omissions for a first version. Each has a clear seam, so yo
 | Moving or reordering pages and sections | Pages sort by name; renaming covers most needs. | A `PUT /boards/{id}` location field plus drag and drop in `ui/Sidebar.tsx`. |
 | Search across pages | Needs an index over every page file. | A `/api/search` route over `library.py`. |
 | Grid snapping and alignment guides | Nice to have. | One function applied to the delta in `moveElements`. |
-| Touch pinch-zoom, mobile layout, i18n | Desktop first. Pointer events keep basic touch working. | `input/pointer.ts`, `ui/*`. |
+| Mobile layout, i18n | Desktop first (touch gestures and the pen work on a laptop). | `ui/*`. |
 | System-clipboard images, copy as PNG | Unavailable on the non-secure e2e origin. | `input/clipboard.ts`. |
 
 ## Your data and backups
@@ -171,6 +195,7 @@ Exact pins (all licenses are MIT, ISC, BSD, Apache-2.0, or OFL-1.1 for the font)
 | Python image | `python:3.14.9-slim-trixie` (venv at `/opt/venv` inside the image) |
 | React, React DOM | 19.3.1 |
 | rough.js | 4.6.6 |
+| perfect-freehand | 1.2.2 |
 | @fontsource/caveat | 5.3.0 |
 | Vite / @vitejs/plugin-react | 8.3.5 / 6.1.2 |
 | TypeScript | 6.0.3 |
