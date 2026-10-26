@@ -175,7 +175,7 @@ export function Toolbar() {
                     }
                   : {})}
               >
-                <ToolIcon tool={id} size={20} />
+                <ToolIcon tool={id} size={24} />
                 {hint && <span className="tool-hint">{hint}</span>}
               </button>
             </Fragment>
@@ -192,7 +192,7 @@ export function Toolbar() {
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => toggleToolLock()}
         >
-          <Icon name={toolLocked ? 'lock' : 'unlock'} size={20} />
+          <Icon name={toolLocked ? 'lock' : 'unlock'} size={24} />
         </button>
       </div>
       {ghost &&

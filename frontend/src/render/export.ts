@@ -1,6 +1,6 @@
 // PNG and JSON export/import, drawn by the same drawScene as the live canvas (WP2).
 import type { ChalkElement, Rect } from '../types';
-import { EXPORT_PADDING, EXPORT_SCALE, MAX_CANVAS_SIDE } from '../constants';
+import { CANVAS_BACKGROUND, EXPORT_PADDING, EXPORT_SCALE, MAX_CANVAS_SIDE } from '../constants';
 import { expandRect } from '../core/math';
 import { getCommonBounds } from '../core/geometry';
 import { SceneParseError, parseSceneFile, toSceneFile } from '../core/serialize';
@@ -20,7 +20,7 @@ export function computeExportFrame(elements: readonly ChalkElement[], o: FrameOp
   return { bounds, scale };
 }
 
-/** Renders the whole scene to a new canvas (white background unless `background` says otherwise). Null if empty. */
+/** Renders the whole scene to a new canvas (canvas-coloured background unless `background` says otherwise). Null if empty. */
 export function renderToCanvas(elements: readonly ChalkElement[], o: RenderOptions = {}): HTMLCanvasElement | null {
   const frame = computeExportFrame(elements, o);
   if (!frame) return null;
@@ -35,7 +35,7 @@ export function renderToCanvas(elements: readonly ChalkElement[], o: RenderOptio
     dpr: scale,
     width: bounds.width,
     height: bounds.height,
-    background: o.background === undefined ? '#ffffff' : o.background,
+    background: o.background === undefined ? CANVAS_BACKGROUND : o.background,
     grid: false,
     hiddenTextId: null,
   });

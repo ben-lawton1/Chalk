@@ -1,6 +1,6 @@
 // Interactive-layer overlay: hover, selection, handles, bind target, drop preview, marquee, all in screen space (WP2).
 import type { ChalkElement, Interaction, Outline, Rect, Viewport } from '../types';
-import { ENDPOINT_RADIUS_PX, HANDLE_SIZE_PX, SELECTION_COLOR, SELECTION_PADDING_PX } from '../constants';
+import { CANVAS_BACKGROUND, ENDPOINT_RADIUS_PX, HANDLE_SIZE_PX, SELECTION_COLOR, SELECTION_PADDING_PX } from '../constants';
 import { worldToScreen } from '../core/viewport';
 import { SHAPES } from '../core/shapes';
 import { getBounds, getHandleMode, getHandlePositions, getOutline, getSelectionBox, isBindable } from '../core/geometry';
@@ -11,7 +11,7 @@ export interface OverlayInput {
   interaction: Interaction; editingId: string | null; dpr: number; width: number; height: number;
 }
 
-const MARQUEE_FILL = 'rgba(79,124,255,0.08)';
+const MARQUEE_FILL = 'rgba(63,185,132,0.10)';
 
 /** Rect in world units to a screen-space rect. */
 function toScreenRect(r: Rect, v: Viewport): Rect {
@@ -98,7 +98,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, input: OverlayInput):
         ctx.strokeRect(r.x - SELECTION_PADDING_PX, r.y - SELECTION_PADDING_PX, r.width + 2 * SELECTION_PADDING_PX, r.height + 2 * SELECTION_PADDING_PX);
         // getHandlePositions applies the selection padding itself, so it takes the unpadded box.
         const positions = getHandlePositions(box, v, mode);
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = CANVAS_BACKGROUND;
         ctx.lineWidth = 1.5;
         for (const p of Object.values(positions)) {
           if (!p) continue;
@@ -111,7 +111,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, input: OverlayInput):
     } else if (mode === 'endpoints') {
       const arrow = byId.get(sel[0]!);
       if (arrow && arrow.type === 'arrow') {
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = CANVAS_BACKGROUND;
         ctx.lineWidth = 1.5;
         for (const pt of [arrow.start, arrow.end]) {
           const s = worldToScreen(pt, v);

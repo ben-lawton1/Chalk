@@ -153,7 +153,7 @@ export function StylePanel() {
               data-testid={TID.strokeCustom}
               title="Custom stroke color"
               aria-label="Custom stroke color"
-              value={isHex(v.strokeColor) ? v.strokeColor : '#000000'}
+              value={isHex(v.strokeColor) ? v.strokeColor : '#e9ecef'}
               onChange={(e) => applyStyle({ strokeColor: e.target.value }, 'stroke-custom')}
             />
           </div>
@@ -183,7 +183,7 @@ export function StylePanel() {
               data-testid={TID.bgCustom}
               title="Custom background color"
               aria-label="Custom background color"
-              value={isHex(v.backgroundColor) ? v.backgroundColor : '#ffffff'}
+              value={isHex(v.backgroundColor) ? v.backgroundColor : '#16181d'}
               onChange={(e) => applyStyle({ backgroundColor: e.target.value }, 'bg-custom')}
             />
           </div>
