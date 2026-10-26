@@ -7,8 +7,11 @@ services:
       target: runtime
     ports:
       - "8080:8000"
+    environment:
+      CHALK_LIBRARY_LABEL: ${CHALK_LIBRARY:-${USERPROFILE}/Documents/Chalk}
     volumes:
-      - chalk-data:/data
+      - ${CHALK_LIBRARY:-${USERPROFILE}/Documents/Chalk}:/library
+      - chalk-data:/data          # legacy SQLite, read once for the import
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
       interval: 10s
