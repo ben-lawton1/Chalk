@@ -20,7 +20,7 @@ def static_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def spa(tmp_path: Path, static_dir: Path):
-    with TestClient(create_app(db_path=str(tmp_path / "s.db"), static_dir=str(static_dir))) as c:
+    with TestClient(create_app(library_dir=str(tmp_path / "lib"), db_path="", static_dir=str(static_dir))) as c:
         yield c
 
 
@@ -63,20 +63,20 @@ def test_api_wins_over_static(spa):
 
 
 def test_no_mount_when_dir_empty_string(tmp_path):
-    c = TestClient(create_app(db_path=str(tmp_path / "a.db"), static_dir=""))
+    c = TestClient(create_app(library_dir=str(tmp_path / "lib"), db_path="", static_dir=""))
     assert c.get("/").status_code == 404
     assert c.get("/api/health").status_code == 200
     assert c.get("/api/nope").json() == {"detail": "Not found"}
 
 
 def test_no_mount_when_dir_absent(tmp_path):
-    c = TestClient(create_app(db_path=str(tmp_path / "a.db"), static_dir=str(tmp_path / "nope")))
+    c = TestClient(create_app(library_dir=str(tmp_path / "lib"), db_path="", static_dir=str(tmp_path / "nope")))
     assert c.get("/").status_code == 404
 
 
 def test_no_mount_when_dir_has_no_files(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
-    app = create_app(db_path=str(tmp_path / "a.db"), static_dir=str(empty))
+    app = create_app(library_dir=str(tmp_path / "lib"), db_path="", static_dir=str(empty))
     assert not any(getattr(r, "name", None) == "spa" for r in app.routes)
     assert TestClient(app).get("/").status_code == 404

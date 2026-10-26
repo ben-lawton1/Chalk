@@ -13,7 +13,8 @@ services:
       context: .
       target: runtime
     environment:
-      CHALK_DB_PATH: /tmp/chalk-e2e.db
+      CHALK_LIBRARY_DIR: /tmp/chalk-e2e-library
+      CHALK_DB_PATH: ""
     healthcheck: *health
   e2e:
     image: chalk-e2e:local
@@ -46,7 +47,8 @@ services:
       context: .
       target: api-dev
     environment:
-      CHALK_DB_PATH: /tmp/chalk-unit.db
+      CHALK_LIBRARY_DIR: /tmp/chalk-unit-library
+      CHALK_DB_PATH: ""
     volumes:
       - ./backend/app:/app/app:ro
       - ./backend/tests:/app/tests:ro

@@ -21,14 +21,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN python -m venv /opt/venv
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r /tmp/requirements.txt
-RUN useradd --create-home --uid 10001 chalk && mkdir -p /data && chown chalk:chalk /data
+RUN useradd --create-home --uid 10001 chalk && mkdir -p /data /library && chown chalk:chalk /data /library
 WORKDIR /app
 
 FROM api-base AS api-dev
 COPY backend/requirements-dev.txt /tmp/requirements-dev.txt
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r /tmp/requirements-dev.txt
 COPY --chown=chalk:chalk backend/ /app/
-ENV CHALK_DB_PATH=/data/chalk-dev.db CHALK_STATIC_DIR=/app/static
+ENV CHALK_DB_PATH=/data/chalk-dev.db CHALK_LIBRARY_DIR=/library CHALK_STATIC_DIR=/app/static
 USER chalk
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
@@ -36,7 +36,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 FROM api-base AS runtime
 COPY --chown=chalk:chalk backend/app /app/app
 COPY --from=web-build --chown=chalk:chalk /web/dist /app/static
-ENV CHALK_DB_PATH=/data/chalk.db CHALK_STATIC_DIR=/app/static
+ENV CHALK_DB_PATH=/data/chalk.db CHALK_LIBRARY_DIR=/library CHALK_STATIC_DIR=/app/static
 USER chalk
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

@@ -9,6 +9,7 @@ services:
       CHALK_DB_PATH: /data/chalk-dev.db
     volumes:
       - ./backend/app:/app/app
+      - ${CHALK_DEV_LIBRARY:-chalk-dev-library}:/library
       - chalk-dev-data:/data
     ports:
       - "8000:8000"
@@ -28,3 +29,4 @@ services:
       - api
 volumes:
   chalk-dev-data: {}
+  chalk-dev-library: {}
