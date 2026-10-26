@@ -5,9 +5,9 @@ import { FIT_MAX_ZOOM, FIT_PADDING_PX, MAX_ZOOM, MIN_ZOOM, PAGE_MARGIN } from '.
 /** Top-left corner of the page: (0, 0), or further up/left when content sits at negative coordinates. */
 export function pageOrigin(bounds: Rect | null): Point {
   if (!bounds) return { x: 0, y: 0 };
-  const x = bounds.x - PAGE_MARGIN;
-  const y = bounds.y - PAGE_MARGIN;
-  return { x: Number.isFinite(x) ? Math.min(0, x) : 0, y: Number.isFinite(y) ? Math.min(0, y) : 0 };
+  // Content inside the page (even touching its edge) never lets you scroll past (0, 0).
+  const edge = (v: number): number => (Number.isFinite(v) && v < 0 ? v - PAGE_MARGIN : 0);
+  return { x: edge(bounds.x), y: edge(bounds.y) };
 }
 /** You cannot scroll above or left of the page origin. Returns `v` itself when nothing changes. */
 export function clampViewport(v: Viewport, origin: Point): Viewport {

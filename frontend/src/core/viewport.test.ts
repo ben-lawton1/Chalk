@@ -97,7 +97,8 @@ describe('pageOrigin and clampViewport', () => {
     expect(pageOrigin({ x: PAGE_MARGIN, y: PAGE_MARGIN, width: 10, height: 10 })).toEqual({ x: 0, y: 0 });
   });
   it('the origin moves up/left to keep negative content reachable, with a margin', () => {
-    expect(pageOrigin({ x: -200, y: 10, width: 10, height: 10 })).toEqual({ x: -200 - PAGE_MARGIN, y: 10 - PAGE_MARGIN });
+    expect(pageOrigin({ x: -200, y: 10, width: 10, height: 10 })).toEqual({ x: -200 - PAGE_MARGIN, y: 0 });
+    expect(pageOrigin({ x: 0, y: 5, width: 10, height: 10 })).toEqual({ x: 0, y: 0 });
     expect(pageOrigin({ x: 60, y: -70, width: 10, height: 10 })).toEqual({ x: 0, y: -70 - PAGE_MARGIN });
   });
   it('non-finite bounds fall back to 0', () => {
