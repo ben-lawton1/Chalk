@@ -124,6 +124,7 @@ The routes, all under `/api`:
 
 | Route | Does |
 |---|---|
+| `GET /config` | `{terminalUrl}`: where the browser finds the terminal bridge (env `CHALK_TERMINAL_URL`) |
 | `GET /library` | `{path, notebooks: [{name, sections: [{name, pages: [summary]}]}]}`, naturally sorted |
 | `GET /boards`, `POST /boards` | flat list (newest first); create, optionally in `{notebook, section}` |
 | `GET` / `PUT` / `DELETE /boards/{id}` | load; checked save (`baseVersion`, 409 on conflict), a new `name` renames the file; move to trash |
