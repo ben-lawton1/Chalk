@@ -235,7 +235,7 @@ export const PEN_PREFS_STORAGE_KEY = 'chalk:pens';
 // ---------------------------------------------------------------------------
 /** Top-left of the notes column in world px: just inside the page's home corner. */
 export const NOTES_X = PAGE_MARGIN + 16;
-export const NOTES_Y = PAGE_MARGIN + 16;
+export const NOTES_Y = 96; // below the top bar and the main toolbar (their bottom edge is about 66 px at 100% zoom)
 export const NOTES_WIDTH = 760;
 export const NOTES_MIN_WIDTH = 320;
 export const NOTES_MAX_WIDTH = 2000;

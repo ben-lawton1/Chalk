@@ -141,7 +141,7 @@ test('inactive notes pass pointer input through; double-click in the column ente
   expect(await active(page)).toBe(false);
   await page.getByTestId('tool-select').click();
   // Double-click on the text puts the caret there.
-  await page.mouse.dblclick(96, 70);
+  await page.mouse.dblclick(96, 108);
   await expect.poll(() => active(page)).toBe(true);
   await expect(editorEl(page)).toBeFocused();
   // Clicking the canvas outside the column leaves notes mode (and starts the usual marquee/select there).

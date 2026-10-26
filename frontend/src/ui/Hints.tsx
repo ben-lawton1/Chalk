@@ -52,12 +52,13 @@ function contentIsOffscreen(s: AppState): boolean {
 }
 
 function WelcomeHint() {
-  const show = useAppState((s) => s.board !== null && s.saveStatus !== 'loading' && s.elements.length === 0);
+  const show = useAppState((s) => s.board !== null && s.saveStatus !== 'loading' && s.elements.length === 0 && !s.notesActive && isNotesEmpty(s.notes));
   if (!show) return null;
   return (
     <div className="welcome-hint" data-testid={TID.welcomeHint}>
       <span>Drag a shape from the toolbar — or press R and drag.</span>{' '}
       <span>Double-click anywhere to write.</span>{' '}
+      <span>Press N to take notes.</span>{' '}
       <span>Press ? for all shortcuts.</span>
     </div>
   );
