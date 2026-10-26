@@ -23,8 +23,11 @@ ui/* buttons  ---------------------------------------------------------+
                                                        - ui/Canvas.tsx  -> render/*  (two canvases, rAF)
                                                        - the React chrome (useAppState)
                                                        - persistence/autosave.ts
+                                                       - persistence/library.ts (sidebar tree refresh)
                                                        - input/pointer.ts (cursor)
 ```
+
+Pages are stored by the backend as files: `backend/app/library.py` maps `<library>/<Notebook>/<Section>/<Page>.chalk` to the `/api` routes. The frontend never sees paths, only ids plus `notebook` / `section` names.
 
 Folder rules (nothing imports "upwards", so there are no cycles):
 
@@ -49,6 +52,8 @@ Inside `core/` the order is `math -> ids -> viewport -> shapes -> text -> geomet
 - **One undo entry per command** in `state/actions.ts`. Gestures push a single entry when they finish. Use a `mergeKey` for things that should collapse (sliders, nudging).
 - **Named exports only**, no classes (except `Error` subclasses), React 19 without a dev double-mount wrapper.
 - **No `crypto.randomUUID` or `navigator.clipboard`.** The e2e suite runs on a non-secure origin (`http://app-test:8000`), where they do not exist.
+- **The page starts at (0, 0).** `setViewport` in `state/store.ts` clamps every viewport with `clampViewport(v, pageOrigin(bounds))` from `core/viewport.ts`, so nothing can scroll above or left of the page (content at negative coordinates widens the limit so it stays reachable). Set the viewport only through `setViewport`.
+- **The canvas sits in a stage.** `ui/App.tsx` puts the canvas and text editor in a fixed `.stage` that starts at `var(--sidebar-w)` (264px with the sidebar open, 0 closed). Screen coordinates are stage-relative. Chrome that is anchored left or centred offsets by `--sidebar-w`.
 - **Hand-drawn shapes are deterministic.** Each element has a `seed`, so the same element always looks the same. `render/roughShapes.ts` caches drawables and survives drags.
 
 ## Recipes
@@ -96,15 +101,33 @@ Edit `chooseFixedPoint` in `core/binding.ts`. The default is center-directed (`[
 
 ### Add an API field
 
-`backend/app/models.py`, then `backend/app/routes.py`, then `frontend/src/types.ts`, then `frontend/src/persistence/api.ts`. Add a case to `backend/tests/test_boards.py`.
+`backend/app/models.py`, then `backend/app/routes.py` (and `library.py` if it is stored), then `frontend/src/types.ts`, then `frontend/src/persistence/api.ts`. Add a case to `backend/tests/test_boards.py` or `test_library.py`.
+
+The routes, all under `/api`:
+
+| Route | Does |
+|---|---|
+| `GET /library` | `{path, notebooks: [{name, sections: [{name, pages: [summary]}]}]}`, naturally sorted |
+| `GET /boards`, `POST /boards` | flat list (newest first); create, optionally in `{notebook, section}` |
+| `GET` / `PUT` / `DELETE /boards/{id}` | load; checked save (`baseVersion`, 409 on conflict), a new `name` renames the file; move to trash |
+| `POST /notebooks`, `PUT` / `DELETE /notebooks/{nb}` | create, rename, trash a notebook |
+| `POST /notebooks/{nb}/sections`, `PUT` / `DELETE /notebooks/{nb}/sections/{sec}` | the same for sections |
+
+The server may change a name (unsafe characters become `-`, duplicates get ` (2)`), so clients adopt the `name` in each response.
+
+### The library on disk
+
+`library.py` rescans the folders on every listing; only parsed page headers are cached, by path, mtime and size, so edits made in Explorer show up at once. Writes are atomic (temp file plus `os.replace`, retried briefly on `PermissionError` for OneDrive). An id that is missing from the index triggers one rescan, so a page that was moved still resolves. A copied page gets a fresh id. A page file is `{"type": "chalk/page", "formatVersion": 1, "id", "version", "createdAt", "updatedAt", "scene"}`. Deletes move into `<library>/.chalk/trash/`. On startup, `main.py` imports boards from a v1 SQLite file (`CHALK_DB_PATH`) once, into `Imported/Boards`, and writes the marker `.chalk/legacy-imported`.
 
 ### Change the scene file format
 
-Bump `SCENE_FILE_VERSION` in `constants.ts` and add a migration in `core/serialize.ts`:
+Bump `SCENE_FILE_VERSION` in `constants.ts` (and `SCENE_VERSION` in `backend/app/models.py`, used for new empty pages) and add a migration in `core/serialize.ts`:
 
 ```ts
-MIGRATIONS[1] = (f) => ({ ...f, version: 2, /* transform the old shape here */ });
+MIGRATIONS[2] = (f) => ({ ...f, version: 3, /* transform the old shape here */ });
 ```
+
+`MIGRATIONS[1]` (v1 to v2) is the example to copy. It maps the light v1 palette to the dark one, and moves content at negative coordinates onto the page with `moveElements`, which keeps arrow bindings intact. A migrated page differs from the server copy, so autosave writes it back once.
 
 Older files are migrated on import and on board load; files from a newer Chalk are rejected with a clear message.
 
@@ -127,6 +150,8 @@ Tips when writing an e2e test:
 
 - Create your own board through the API (`freshBoard` or `seededBoard` in `e2e/tests/helpers.ts`); two workers run in parallel.
 - On a fresh empty board the viewport is the identity, so world coordinates equal screen coordinates. Seeded boards get the same through `localStorage['chalk:viewport:<id>']`.
+- The `test` fixture in `helpers.ts` starts every page with the sidebar closed, so the stage begins at client (0, 0). Call `withSidebar(page)` to open it. `worldToScreen` and `getElementScreenBounds` in the hook return client coordinates either way.
+- Every spec shares one library, and new pages without a location land in the same default section, so names come back as `Untitled page (N)`. Match names with a regex, or create your own notebook with a random suffix.
 - Drag with at least 20 px of movement (thresholds are 3-8 px), using `steps`.
 - Floating panels sit on top of the canvas: with something selected, the style panel covers the left 232 px. Deselect first if you need to click there.
 
@@ -135,4 +160,4 @@ Tips when writing an e2e test:
 - **Dev mode** (`docker compose -f compose.dev.yaml up --build`, <http://localhost:5173>) hot-reloads both the frontend and the API.
 - Open the browser console and type `__CHALK__.getAppState()` or `__CHALK__.getElements()`.
 - A stuck gesture usually means a tool did not clear its state in `onCancel`; `cancelGesture()` in `input/pointer.ts` is the single place every Escape, `pointercancel` and window blur goes through.
-- Boards are in `/data/chalk.db`. To inspect one: `docker compose exec app python -c "import sqlite3; print(sqlite3.connect('/data/chalk.db').execute('select id, name, version from boards').fetchall())"` (check the table name in `backend/app/db.py`).
+- Pages are plain JSON files in your library folder; open one in any editor. `curl localhost:8080/api/library` shows what the server sees.

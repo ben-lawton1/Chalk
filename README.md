@@ -2,7 +2,7 @@
 
 > The future of whiteboarding.
 
-Chalk is a small, readable, MIT-licensed whiteboard in the spirit of Excalidraw. Drag shapes onto an infinite canvas, type text anywhere, and connect boxes with arrows that stay attached when you move them. The rendering, geometry, arrow binding and text editor are our own code (about 11k lines of TypeScript, tests included, plus a small Python API), so you can read the whole engine in an afternoon and bend it to your own ideas.
+Chalk is a small, readable, MIT-licensed whiteboard in the spirit of Excalidraw, organised like OneNote. Pages live in sections inside notebooks, stored as plain files in a folder on your PC. Each page starts in its top-left corner and grows right and down. Drag shapes onto it, type text anywhere, and connect boxes with arrows that stay attached when you move them. The rendering, geometry, arrow binding and text editor are our own code (about 11k lines of TypeScript, tests included, plus a small Python API), so you can read the whole engine in an afternoon and bend it to your own ideas.
 
 Everything runs in Docker. Nothing is installed on your machine: no Node, no Python, no npm packages.
 
@@ -10,13 +10,16 @@ Everything runs in Docker. Nothing is installed on your machine: no Node, no Pyt
 
 ## Quick start
 
-You need Docker Desktop (or any Docker with Compose v2). From the repository root:
+You need Docker Desktop (or any Docker with Compose v2).
 
-```sh
-docker compose up --build
-```
+1. Choose where your notebooks live. Copy `.env.example` to `.env` (git-ignored) and set `CHALK_LIBRARY` to a folder on your PC, for example `CHALK_LIBRARY=C:/Users/you/Documents/Chalk`. Without a `.env`, Chalk uses `%USERPROFILE%/Documents/Chalk`. If your Documents folder is redirected into OneDrive, point at the OneDrive path (`C:/Users/you/OneDrive/Documents/Chalk`).
+2. From the repository root:
 
-Then open <http://localhost:8080>. The first build takes a few minutes (`npm ci` plus `vite build`); later builds reuse the cache. Add `-d` to run in the background, and use `docker compose down` to stop it. Your boards are kept.
+   ```sh
+   docker compose up --build
+   ```
+
+Then open <http://localhost:8080>. The first build takes a few minutes (`npm ci` plus `vite build`); later builds reuse the cache. Add `-d` to run in the background, and use `docker compose down` to stop it. Your pages stay in the library folder.
 
 Check that the server is up: <http://localhost:8080/api/health> returns `{"status":"ok"}`.
 
@@ -27,10 +30,11 @@ Check that the server is up: <http://localhost:8080/api/health> returns `{"statu
 - **Text anywhere:** double-click the empty canvas, or use the text tool. Double-click a shape to label it; labels wrap, are centered, and the shape grows to fit. Free text can be turned into a fixed-width wrapping box by dragging its side handle.
 - **Arrows that connect:** hover a shape to see the binding target, drag from one shape to another and both ends attach. Arrows follow when shapes move, resize or grow, freeze in place if a shape is deleted, and get their bindings back on undo. Shift snaps to 15 degrees, Ctrl avoids connecting, Alt anchors at the exact point. Arrows can carry labels; the line tool draws plain lines.
 - **Style:** stroke and background color (palette or custom), fill style, stroke width and style, sloppiness, edges, opacity, font size and family, text alignment and arrowheads. Styles are sticky: they apply to the selection and become the defaults for the next shape.
-- **Infinite canvas:** pan with the wheel, Shift+wheel, Space+drag, middle mouse or the hand tool; zoom with Ctrl+wheel, the buttons or the keys; zoom to fit, zoom to selection, and a "Back to content" button.
+- **Pages with a home corner:** like a OneNote page, the canvas starts at its top-left corner and extends without limit to the right and down. You can't scroll above or left of it. New pages open at 100% in that corner; `Home` (or the house button) takes you back. Pan with the wheel, Shift+wheel, Space+drag, middle mouse or the hand tool; zoom with Ctrl+wheel, the buttons or the keys; zoom to fit, zoom to selection, and a "Back to content" button.
+- **Notebooks, sections and pages:** the left sidebar shows your library as a tree (`Ctrl+\` hides it). Add, rename and delete notebooks, sections and pages from it; deleting needs a second click to confirm. Every page saves automatically, and the view of each page is remembered. If a page is changed somewhere else you get a conflict banner (Reload or Keep mine), and unsaved work is also backed up in the browser and restored after a crash or a lost connection.
+- **Dark theme:** a dark canvas, white strokes by default and a restrained green accent.
 - **Undo and redo** for every change, with merged slider and nudge steps.
-- **Boards:** many boards, saved automatically to a small SQLite database behind a Python API. The view of each board is remembered. If a board is changed somewhere else you get a conflict banner (Reload or Keep mine), and unsaved work is also backed up in the browser and restored after a crash or a lost connection.
-- **Files:** export and import `.chalk.json`, and export a crisp 2x PNG with a white background.
+- **Files:** export and import `.chalk.json`, and export a crisp 2x PNG on the dark page background.
 
 ### Keyboard shortcuts
 
@@ -53,6 +57,8 @@ Press `?` in the app for the full list. The essentials:
 | Wheel, `Shift`+wheel, `Space`+drag | Pan |
 | `Ctrl`+wheel, `Ctrl`+`=` / `-` / `0` | Zoom at the cursor, zoom in / out / 100% |
 | `Shift+1` / `Shift+2` | Zoom to fit everything / to the selection |
+| `Home` | Back to the top-left of the page at 100% |
+| `Ctrl+\` | Show or hide the sidebar |
 | `Ctrl+S` | Save now (autosave runs anyway) |
 
 ## Development mode (hot reload)
@@ -61,7 +67,7 @@ Press `?` in the app for the full list. The essentials:
 docker compose -f compose.dev.yaml up --build
 ```
 
-Open <http://localhost:5173>. The Vite dev server proxies `/api` to the Python API on <http://localhost:8000>. Saving a file under `frontend/src` hot-reloads the page; saving a file under `backend/app` restarts uvicorn. File watching uses polling, because bind mounts on Windows and WSL2 deliver no change events. Dev data lives in its own volume (`chalk-dev-data`), separate from your real boards. `docker compose -f compose.dev.yaml down` stops it; add `-v` only if you want to wipe the **dev** database.
+Open <http://localhost:5173>. The Vite dev server proxies `/api` to the Python API on <http://localhost:8000>. Saving a file under `frontend/src` hot-reloads the page; saving a file under `backend/app` restarts uvicorn. File watching uses polling, because bind mounts on Windows and WSL2 deliver no change events. Dev pages live in their own volume (`chalk-dev-library`), separate from your real library; set `CHALK_DEV_LIBRARY` to a host folder if you want to see them in Explorer. `docker compose -f compose.dev.yaml down` stops it; add `-v` only if you want to wipe the **dev** library.
 
 After changing `frontend/package.json` or its lockfile, rebuild with `docker compose -f compose.dev.yaml up --build -V`.
 
@@ -92,13 +98,13 @@ docker compose -f compose.test.yaml run --rm --build e2e npx playwright test tes
 docker compose -f compose.test.yaml down
 ```
 
-The test instance has its own database in `/tmp` and never touches your boards.
+The test instance has its own library in `/tmp` inside the container and never touches yours.
 
 ## Project structure
 
 ```
 Dockerfile, compose.yaml, compose.dev.yaml, compose.test.yaml   one image, three Compose projects
-backend/app/        FastAPI app: models.py (API contract), db.py (SQLite), routes.py, main.py
+backend/app/        FastAPI app: models.py (API contract), library.py (the folder library), db.py (one-time v1 SQLite import), routes.py, main.py
 backend/tests/      pytest
 frontend/src/
   types.ts, constants.ts, testids.ts     shared contracts
@@ -129,26 +135,31 @@ These are deliberate omissions for a first version. Each has a clear seam, so yo
 | Images and embeds | Needs blob storage. | `/api/files` plus an `image` element. |
 | Real-time collaboration, auth | This is a local single-user app. | Per-element version fields, a WebSocket route. |
 | SVG export | Needs a second renderer and an embedded font. | `gen.toPaths(drawable)` in `render/export.ts`. |
-| Dark mode | Element colors are literal. | CSS tokens plus a color transform in `drawScene`. |
+| Light theme toggle | v2 went dark; element colors are literal. | CSS tokens plus a color transform in `drawScene`. |
+| Moving or reordering pages and sections | Pages sort by name; renaming covers most needs. | A `PUT /boards/{id}` location field plus drag and drop in `ui/Sidebar.tsx`. |
+| Search across pages | Needs an index over every page file. | A `/api/search` route over `library.py`. |
 | Grid snapping and alignment guides | Nice to have. | One function applied to the delta in `moveElements`. |
 | Touch pinch-zoom, mobile layout, i18n | Desktop first. Pointer events keep basic touch working. | `input/pointer.ts`, `ui/*`. |
 | System-clipboard images, copy as PNG | Unavailable on the non-secure e2e origin. | `input/clipboard.ts`. |
 
 ## Your data and backups
 
-Boards are stored in SQLite at `/data/chalk.db` inside the container, on the Docker named volume `chalk_chalk-data`. The volume survives `docker compose down`, `docker compose up --build`, restarts and image rebuilds.
+Your pages are ordinary files in the library folder (`CHALK_LIBRARY`), bind-mounted into the container at `/library`. Nothing about them is stored in the repository or pushed to GitHub.
 
-- **Back up a board:** Menu, then "Export JSON". The `.chalk.json` file is portable; "Import JSON" puts it on any board in any Chalk. This is the easiest backup and the one to keep before experiments.
-- **Never run `docker compose down -v` in this project:** `-v` deletes the volume and with it every board. Plain `docker compose down` is safe.
-- **Copy the whole database out of the volume** (no install needed; the app must be running). The database uses SQLite WAL mode, so take the copy with SQLite's backup call rather than copying the file directly:
+```
+Chalk/                          your CHALK_LIBRARY folder
+  Work/                         a notebook (a folder)
+    Projects/                   a section (a folder)
+      Roadmap.chalk             a page (JSON; the file name is the page name)
+  .chalk/trash/                 deleted pages, sections and notebooks are moved here, not erased
+```
 
-  ```sh
-  docker compose exec app python -c "import sqlite3; s=sqlite3.connect('/data/chalk.db'); d=sqlite3.connect('/tmp/chalk-backup.db'); s.backup(d); d.close()"
-  docker compose cp app:/tmp/chalk-backup.db ./chalk-backup.db
-  ```
-
-  Backups like this are not committed: `*.db` is git-ignored.
-- **OneDrive and similar sync folders:** this repository can live in one, but Docker volumes are not part of the folder, so your boards are never synced or touched by it. Keep the folder set to "Always keep on this device" if you use dev mode, because hot reload needs the files to be present locally. Docker creates an empty `frontend/node_modules` folder here; do not let a sync tool fill it.
+- **Back up:** copy the folder. Each `.chalk` file is self-contained JSON (`{"type":"chalk/page", "id", "version", ..., "scene"}`).
+- **Change things in Explorer:** you can rename, move or copy notebooks, sections and pages while Chalk runs. The sidebar picks up changes when the window gets focus. A copied page gets a new id automatically. Names that Windows can't store (`a/b`, `CON`) are adjusted, and duplicates get ` (2)`.
+- **Undo a delete:** move the item back out of `.chalk/trash/` (strip the timestamp prefix from its name).
+- **Boards from Chalk v1** (the SQLite database on the `chalk_chalk-data` volume) are imported once, on the first start, into the notebook `Imported`, section `Boards`. The first time you open one, its colours are converted to the dark palette and content that sat left of or above the old canvas origin is moved onto the page. The database itself is left untouched; you can delete the volume once you're happy (`docker volume rm chalk_chalk-data`).
+- **OneDrive:** a library inside OneDrive is backed up to the cloud. Right-click the Chalk folder and choose "Always keep on this device", so Docker never sees cloud-only placeholder files. Saves are atomic and retry briefly if OneDrive holds a file open. Docker creates an empty `frontend/node_modules` folder in this repository; don't let a sync tool fill it.
+- **Export a single page:** Menu, then "Export as JSON" gives a portable `.chalk.json`, and "Import scene…" loads one onto the current page.
 
 ## Versions
 
