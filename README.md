@@ -2,7 +2,7 @@
 
 > The future of whiteboarding.
 
-Chalk is a small, readable, MIT-licensed whiteboard in the spirit of Excalidraw, organised like OneNote. Pages live in sections inside notebooks, stored as plain files in a folder on your PC. Each page starts in its top-left corner and grows right and down. Drag shapes onto it, type text anywhere, and connect boxes with arrows that stay attached when you move them. The rendering, geometry, arrow binding and text editor are our own code (about 11k lines of TypeScript, tests included, plus a small Python API), so you can read the whole engine in an afternoon and bend it to your own ideas.
+Chalk is a small, readable, MIT-licensed whiteboard in the spirit of Excalidraw, organised like OneNote. Pages live in sections inside notebooks, stored as plain files in a folder on your PC. Each page starts in its top-left corner and grows right and down. Drag shapes onto it, type text anywhere, and connect boxes with arrows that stay attached when you move them. The rendering, geometry, arrow binding and text editor are our own code (about 22k lines of TypeScript, Go and Python, tests included), so you can read the whole engine in an afternoon and bend it to your own ideas.
 
 Everything runs in Docker. Nothing is installed on your machine: no Node, no Python, no npm packages.
 
@@ -33,6 +33,8 @@ Check that the server is up: <http://localhost:8080/api/health> returns `{"statu
 - **Pages with a home corner:** like a OneNote page, the canvas starts at its top-left corner and extends without limit to the right and down. You can't scroll above or left of it. New pages open at 100% in that corner; `Home` (or the house button) takes you back. Pan with the wheel, Shift+wheel, Space+drag, middle mouse or the hand tool; zoom with Ctrl+wheel, the buttons or the keys; zoom to fit, zoom to selection, and a "Back to content" button.
 - **Notebooks, sections and pages:** the left sidebar shows your library as a tree (`Ctrl+\` hides it). Add, rename and delete notebooks, sections and pages from it; deleting needs a second click to confirm. Every page saves automatically, and the view of each page is remembered. If a page is changed somewhere else you get a conflict banner (Reload or Keep mine), and unsaved work is also backed up in the browser and restored after a crash or a lost connection.
 - **Pen and touch:** a stylus draws pressure-sensitive ink (the Pen button opens a tray with 3 pens, each with its own colour and size, plus an eraser and a lasso). The pen's eraser button erases and its barrel button lassos, like OneNote. A finger pans, two fingers pinch-zoom, a tap selects and a double tap edits; a resting palm is ignored. See [Pen and touch](#pen-and-touch).
+- **Page notes:** a typed, Notion-style document on every page, beside the drawing: headings, lists, to-dos, quotes, code, tables, callouts, a slash menu and links to other pages. Press `N`. It pans and zooms with the page and saves in the page file. See [Page notes](#page-notes).
+- **Terminal:** a real PowerShell, WSL or ssh terminal in a panel at the bottom of the window (`Ctrl+`` toggles it), through a small host helper you build with Docker. See [Terminal](#terminal).
 - **Dark theme:** a dark canvas, white strokes by default and a restrained green accent.
 - **Undo and redo** for every change, with merged slider and nudge steps.
 - **Files:** export and import `.chalk.json`, and export a crisp 2x PNG on the dark page background.
@@ -84,6 +86,51 @@ Press `?` in the app for the full list. The essentials:
 | `Ctrl+\` | Show or hide the sidebar |
 | `` Ctrl+` `` | Show or hide the terminal |
 | `Ctrl+S` | Save now (autosave runs anyway) |
+| `N` | Type in the page notes (see [Page notes](#page-notes) for the notes keys) |
+
+## Page notes
+
+Every page has a second, typed layer beside the drawing: the **notes column**. It is a text document like a Notion page, anchored just inside the page's home corner (below the toolbar), 760 world px wide, growing down as you type. Press `Enter` for a new block; there is no box to place or drag.
+
+**How notes differ from free text.** Free text (the `T` tool) is a canvas object: you place it, drag it, style it, and it is drawn on the canvas in the handwriting font. Notes are one flowing document per page, in the UI font, with headings, lists, to-dos, tables, code and links to other pages. Notes pan and zoom with the page and have no background, so shapes and ink underneath stay visible, and you can draw and annotate over them. They are saved in the page file (scene version 4), so they sync, export and back up with the page. `.chalk.json` export and import carry the notes; a PNG export draws the canvas only, not the notes.
+
+**Notes mode.** Notes are static until you enter notes mode; then the column takes the keyboard and the pointer, and everything else waits.
+
+- Enter: click the **Notes** button in the toolbar (after Text) or press `N`; the caret returns to where you left it on this page (and the view pans to it if it is off screen). Or double-click (mouse) or double-tap (pen, touch) inside the column with the select or text tool; on an empty page, double-click still makes free text.
+- Leave: press `Esc` (an open menu closes first), click the canvas outside the column (the click then does what the tool would), choose any tool, or switch page. The Pen, Eraser and Lasso tools always leave notes mode, so the pen always inks.
+- While it is off, clicks, marquees and ink go straight through the column to the canvas. Page links stay clickable.
+- Touch and pen in the column: a finger drag pans the page and two fingers pinch-zoom, as everywhere; a finger tap or pen tap places the caret; the mouse selects text. Wheel over the column pans and zooms the page.
+- Inside the column `Ctrl+Z` and `Ctrl+Y` undo typing; drawing undo is separate.
+
+**Markdown shortcuts** (type at the start of a block, then a space):
+
+| Type | Result | Keys |
+|---|---|---|
+| `# `, `## `, `### ` | Heading 1, 2, 3 | `Ctrl+Alt+1/2/3` |
+| `- `, `* `, `+ ` | Bulleted list | `Ctrl+Shift+8` |
+| `1. ` (any number) | Numbered list | `Ctrl+Shift+7` |
+| `[] `, `[ ] `, `[x] ` | To-do list (click the box to tick it) | `Ctrl+Shift+9` |
+| `> ` or `" ` | Quote | |
+| `>> ` | Toggle list | |
+| `---` | Divider | |
+| ```` ``` ```` (plus a language) | Code block, highlighted | `Ctrl+Alt+C` |
+| `**b**`, `*i*` or `_i_`, `~~s~~`, `` `c` ``, `==h==` | Bold, italic, strike, inline code, highlight | `Ctrl+B`, `Ctrl+I`, `Ctrl+Shift+S`, `Ctrl+E`, `Ctrl+Shift+H` |
+| | Link | `Ctrl+K` |
+
+`Tab` and `Shift+Tab` nest and unnest list items (inside code: two spaces; inside a table: next and previous cell). `Alt+Shift+Up` and `Alt+Shift+Down` move the current block. `Enter` on an empty list item leaves the list.
+
+**Slash commands.** Type `/` at the start of a block or after a space. The text after it filters the list (titles and aliases; prefix matches first); `Up`, `Down`, `Tab` and `Shift+Tab` move, `Enter` or a click picks. `Esc` closes the menu and keeps what you typed. Commands:
+
+| Group | Command (aliases) |
+|---|---|
+| Basic blocks | Text (`/p`), Heading 1, 2, 3 (`/h1`, `/h2`, `/h3`, `/heading`), Bulleted list (`/bullet`, `/ul`), Numbered list (`/numbered`, `/ol`), To-do list (`/todo`, `/task`, `/checkbox`), Toggle list (`/toggle`), Quote (`/quote`), Divider (`/divider`, `/hr`), Callout (`/callout`, `/tip`) |
+| Code and data | Code block (`/code`, `/codeblock`), Inline code (`/inline`, `/inlinecode`), Table (`/table`, `/grid`) |
+| Links | Link to page (`/page`, `/link`), New page (`/newpage`), Web link (`/url`, `/web`) |
+| Style | Highlight (`/highlight`), Bold (`/bold`), Italic (`/italic`), Strikethrough (`/strike`) |
+
+**Tables.** `/table` switches the menu to a size step: rows and columns (`Tab` moves between them, `Enter` inserts; up to 50 by 12), a header-row checkbox and a live preview. Or type the size and press `Enter`: `/table 4x5` or `/table 4 5` inserts at once. In a table `Tab` moves to the next cell and adds a row at the end; a small toolbar appears while the caret is in a table (insert row above or below, column left or right, delete row, column or table).
+
+**Links to pages.** Type `@` or `[[` (or pick Link to page) to search every page in your library; pages in the current section come first, then the current notebook. The last row, `+ New page "<what you typed>"`, creates the page in this section without opening it and links it (`/newpage` does the same with an untitled page). A link is a chip showing the page's current name, so renames follow; a link to a deleted page is struck through. Click a chip to open the page, in notes mode or out of it. `/url` and `Ctrl+K` link a web address (an empty address removes the link).
 
 ## Terminal
 
@@ -199,6 +246,8 @@ frontend/src/
   input/       pointer router (mouse, pen buttons, palm rejection), touch gestures, keyboard shortcuts, clipboard
   persistence/ API client, board lifecycle, autosave and conflict handling, local backup
   ui/          the React chrome (toolbar, style panel, menus, dialogs, text editor)
+  ui/notes/    the page notes: Tiptap editor, layer, slash and page menus, extensions
+  ui/terminal/ the terminal dock panel (xterm, session client, tabs)
   testing/     the window.__CHALK__ hook used by the e2e suite
 e2e/tests/          Playwright specs, helpers and the shared test ids
 docs/HACKING.md     how to extend Chalk (add a shape, a tool, a style, ...)
@@ -215,7 +264,9 @@ These are deliberate omissions for a first version. Each has a clear seam, so yo
 | Rotation | Multiplies the cost of hit testing, resize, binding and the text overlay. Not requested. | Add `angle` plus `MIGRATIONS[2]`; the geometry functions all take an element. |
 | Multi-point, curved or elbow arrows | Straight connectors cover "connect boxes". | `ArrowElement.via?: Point[]`; `resolveArrow` uses the first and last segments. |
 | Point eraser, highlighter, pen tilt, ruler | The eraser removes whole strokes; the pen has no highlighter mode. | `tools/eraser.ts` (split `InkElement.points`), a pen kind in `PenSettings`. |
-| Typed note-taking | The next feature. | A flowing text element beside the free-placed `text` one. |
+| Images, equations and backlinks in the notes | The notes cover text, lists, tables, code and page links. | A new Tiptap node in `ui/notes/extensions/` (see HACKING), plus blob storage for images and an index over every page for backlinks. |
+| Notes in the PNG export | PNG export draws the canvas only. | Render the notes DOM into the export in `render/export.ts`. |
+| Terminal sessions across a reload | A reload closes the socket, and the bridge kills the process. | A session id the bridge keeps alive for a grace period. |
 | Groups and frames | Bookkeeping that would bloat the core. | `groupIds`, and selection expansion in `tools/select.ts`. |
 | Images and embeds | Needs blob storage. | `/api/files` plus an `image` element. |
 | Real-time collaboration, auth | This is a local single-user app. | Per-element version fields, a WebSocket route. |

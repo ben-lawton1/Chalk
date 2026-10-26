@@ -41,9 +41,9 @@ Folder rules (nothing imports "upwards", so there are no cycles):
 | `tools/*` | types, constants, `core/*`, `state/*` |
 | `input/*` | the above plus `tools/*`, autosave |
 | `persistence/*` | types, constants, `core/*`, `state/*` |
-| `ui/*`, `main.tsx` | anything |
+| `ui/*`, `main.tsx` | anything. `ui/notes/` (the page notes editor and its menus) and `ui/terminal/` (the terminal panel) follow the same rule; `ui/notes/menuBridge.ts` and `ui/terminal/session.ts` / `prefs.ts` stay free of React so they can be unit tested in plain node. `state/notesHost.ts` is how `state/` and `input/` reach the mounted editor without importing `ui/` |
 
-Inside `core/` the order is `math -> ids -> viewport -> shapes -> text -> ink -> geometry -> binding -> scene -> serialize`; a module imports only modules before it.
+Inside `core/` the order is `math -> ids -> viewport -> shapes -> text -> ink -> geometry -> binding -> scene -> notes -> serialize`; a module imports only modules before it. `notesView` and `pageLinks` (the notes column geometry, and page link resolution and ranking) import only types and constants, so they can sit anywhere; `notes` (restoring a notes document from a file) needs only `math` and is imported by `serialize`.
 
 ### Pointer routing (v3)
 
@@ -59,6 +59,42 @@ Inside `core/` the order is `math -> ids -> viewport -> shapes -> text -> ink ->
 | Pen near the screen | touches are ignored (palm rejection); a pen down also undoes a pan or pinch that began just before |
 
 `cancelGesture()` is still the single cancel path and now also cancels a touch gesture. The native `dblclick` is honoured only after a mouse pointerdown; pen and touch double taps come from `createTapTracker` (`input/taps.ts`). The route ends on pointermove when no button bit of 1, 2, 4 or 32 is set (32 is the pen's eraser).
+
+### Page notes (v4)
+
+Every page has one typed document, the notes column, next to the drawing. It is a Tiptap 3 (ProseMirror) editor in a DOM layer, not a canvas element, so none of the element machinery (undo entries, hit testing, `core/scene.ts`) applies to it.
+
+```
+ui/notes/NotesLayer.tsx  (one editor per board id, above both canvases, placed like TextEditor: translate + scale from the viewport)
+   |  docChanged            |  focus / blur / caret                  |  ResizeObserver
+   v                        v                                        v
+state/actions.setNotes   state/notesHost.ts (focusAt, blur)       setNotesBounds
+   |                        ^                                        |
+   v                        |  enterNotesMode / leaveNotesMode       v
+AppState.notes  <-- persistence (autosave, backup, conflict reload)   AppState.notesBounds -> zoomToFit, "Back to content"
+```
+
+- **The layer and notes mode.** `AppState` has `notes: NotesDoc | null` (`{ width, doc }`, `doc` is ProseMirror JSON), `notesActive` (notes mode, a flag, not a `ToolId`) and `notesBounds` (the measured world rect of the column, transient). When `notesActive` is false the layer has `pointer-events: none`, so clicks, marquees, ink and touch reach the canvas; page-link chips keep `pointer-events: auto`. `enterNotesMode(world?)` and `leaveNotesMode()` in `state/actions.ts` are the only way in and out: the N key and the toolbar button, the double-click path (`enterNotesIfInColumn`, decided with the pure `inNotesColumn` in `core/notesView.ts`), choosing a tool (`setTool` leaves), a canvas pointerdown in `input/pointer.ts`, a page switch and Esc (`NotesFallbackKeys`, lowest priority so an open menu eats the key first). `state/notesHost.ts` is the seam that lets `state/` and `input/` focus or blur the mounted editor without importing `ui/`. The caret per page is remembered in `localStorage['chalk:notes-caret:<boardId>']`; `core/notesView.ts` has the clamping and pan-to-caret maths.
+- **Store sync.** The editor is keyed by board id, so a page switch builds a fresh editor (a fresh undo history) from `state.notes`. On every document change the layer calls `setNotes({ width, doc: editor.getJSON() })` (no undo entry; ProseMirror's history owns undo while you type). The layer remembers the last object it wrote; a different object in the store (a conflict reload, an import) is an outside replacement and goes into the editor with `setContent(..., { emitUpdate: false })`. Never echo the editor's own update back.
+- **Persistence.** `toSceneFile(elements, notes)` writes `notes`; `parseSceneNotes` reads it through `core/notes.restoreNotes`, which validates defensively (depth, node count, text size, width clamped to [320, 2000]) and returns `null` for anything bad, so broken notes never stop the elements loading. Autosave treats a new `notes` object as dirty, and the local backup and the keepalive flush go through `toSceneFile`. Clipboard payloads carry elements only.
+- **Scene v4.** `SCENE_FILE_VERSION = 4` (and `SCENE_VERSION = 4` in `backend/app/models.py`). `MIGRATIONS[3]` (v3 to v4) is the identity: v3 files simply have no `notes`. The bump is there so that an old cached tab cannot silently drop notes when it saves. The backend envelope check accepts versions 1 to 4 and stores `notes` untouched.
+- **Menus: `menuBridge`.** The `/` slash menu, the `@` / `[[` page picker and the table size step are React components in a body portal (`MenuPopup.tsx`; it flips above the caret near the bottom of the stage and clamps to the stage, so it stays above the terminal panel, and it does not scale with the zoom). The Tiptap `Suggestion` plugins (`suggestions.ts`) only decide when a menu is open; their render hooks call `setMenu` / `clearMenu` in `ui/notes/menuBridge.ts`, a tiny external store that `NotesMenus.tsx` reads with `useSyncExternalStore`. While a menu is open it registers a key handler, and the plugin's `onKeyDown` passes keys to it, so arrows, Enter, Tab and Esc go to the menu first.
+- **Page links.** `ui/notes/extensions/pageLink.ts` is an inline atom node `pageLink { id, label }` drawn as a chip. `core/pageLinks.ts` (pure) resolves a stored link against the library tree (live name, or the stored label with "missing" set) and ranks pages for the picker (current section, then notebook, then the rest; the current page is excluded). Clicking a chip calls `openBoard(id)`. "New page" goes through `persistence/library.createPageQuietly`, which creates the page without opening it.
+
+### Terminal panel (v4)
+
+The terminal is a dock panel (`ui/terminal/`) talking to the host bridge (`bridge/`, Go) over a WebSocket. Pieces:
+
+- `ui/terminal/session.ts`: `TerminalSession`, the WebSocket client (binary frames = raw PTY bytes both ways; text frames are JSON: `resize` out, `exit` and `error` in). It takes a socket factory so `session.test.ts` drives it with a fake socket. No React, no xterm.
+- `ui/terminal/prefs.ts`: `localStorage['chalk:terminal']` = `{open, height}` (always try/catch) and the height clamp (120 px to 70% of the window).
+- `ui/terminal/terminalStore.ts`: its own tiny store (not `AppState`: sessions and xterm instances are not serializable and must outlive page switches). It owns the tabs, the bridge status (`/health`, `/profiles`; polling every 3 s while the panel is open and the bridge offline), the xterm instances (one hidden `.terminal-host` div per tab, so hiding the panel or switching tabs never loses output) and the `--terminal-h` CSS variable on `<html>` (0px when hidden).
+- `ui/terminal/TerminalPanel.tsx`: the button and the panel (tab strip, profile menu, resize grip, offline and "process exited" overlays), read through `useSyncExternalStore`.
+- xterm (`@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`) is imported dynamically the first time a session is created, so it is a separate chunk. It uses the DOM renderer, so the e2e suite reads `.xterm-rows`.
+- Layout: `.stage` has `bottom: var(--terminal-h)` and every bottom-anchored island adds `var(--terminal-h)` to its offset. A new bottom-anchored element must do the same.
+- Keys: `input/keyboard.ts` handles only Ctrl+\` (it dispatches the window event `TERMINAL_TOGGLE_EVENT`; `input/` may not import `ui/`). For any target inside `.terminal-panel`, Ctrl+S, Ctrl+=, Ctrl+-, Ctrl+0 and all plain keys are left alone; Ctrl+C copies via a hidden textarea when text is selected (`navigator.clipboard` does not exist on the e2e origin).
+- Folder rule: `ui/terminal/` may import anything below `ui/`, but `session.ts` and `prefs.ts` stay free of React and xterm so they remain unit-testable in plain node. Only `terminalStore.ts` touches xterm.
+- The bridge URL comes from `GET /api/config` (`terminalUrl`, env `CHALK_TERMINAL_URL`). The e2e suite points it at the `term-test` service, whose only profile is the Linux `shell`.
+
 
 ### Coding rules worth knowing
 
@@ -142,10 +178,10 @@ The server may change a name (unsafe characters become `-`, duplicates get ` (2)
 Bump `SCENE_FILE_VERSION` in `constants.ts` (and `SCENE_VERSION` in `backend/app/models.py`, used for new empty pages) and add a migration in `core/serialize.ts`:
 
 ```ts
-MIGRATIONS[3] = (f) => ({ ...f, version: 4, /* transform the old shape here */ });
+MIGRATIONS[4] = (f) => ({ ...f, version: 5, /* transform the old shape here */ });
 ```
 
-`MIGRATIONS[1]` (v1 to v2) is the example to copy; `MIGRATIONS[2]` (v2 to v3, which added `ink`) is the identity, there so that an old cached tab cannot silently drop ink when it saves. It maps the light v1 palette to the dark one, and moves content at negative coordinates onto the page with `moveElements`, which keeps arrow bindings intact. A migrated page differs from the server copy, so autosave writes it back once.
+`MIGRATIONS[1]` (v1 to v2) is the example to copy; `MIGRATIONS[2]` (v2 to v3, which added `ink`) and `MIGRATIONS[3]` (v3 to v4, which added the page `notes`) are the identity, there so that an old cached tab cannot silently drop ink or notes when it saves. It maps the light v1 palette to the dark one, and moves content at negative coordinates onto the page with `moveElements`, which keeps arrow bindings intact. A migrated page differs from the server copy, so autosave writes it back once.
 
 Older files are migrated on import and on board load; files from a newer Chalk are rejected with a clear message.
 
@@ -155,19 +191,26 @@ Everything numeric lives in `constants.ts`, with units in the comments: drag thr
 
 The pen and touch feel is in the same file. `INK_THINNING`, `INK_SMOOTHING` and `INK_STREAMLINE` shape the ink (how much pressure thins the line, how much the outline is smoothed and the input streamlined) and `INK_MIN_SAMPLE_PX` skips redundant samples. `ERASER_RADIUS_PX`, `LASSO_MIN_INSIDE` (how much of an element must be inside the loop) and `LASSO_MIN_SAMPLE_PX` tune the eraser and lasso. `TOUCH_TAP_SLOP_PX`, `TOUCH_TAP_MAX_MS`, `DOUBLE_TAP_MS` and `DOUBLE_TAP_SLOP_PX` define a tap and a double tap; `TOUCH_HIT_TOLERANCE_PX`, `TOUCH_HANDLE_HIT_PX` and `PEN_HANDLE_HIT_PX` make fingers and pens easier to aim; `PALM_GRACE_MS` is how long a finger is ignored after the pen leaves. `PEN_COLORS`, `PEN_SIZES` and `DEFAULT_PENS` set what the pen tray offers.
 
-### Terminal panel (v4)
+### Add a slash command
 
-The terminal is a dock panel (`ui/terminal/`) talking to the host bridge (`bridge/`, Go) over a WebSocket. Pieces:
+The slash menu is data-driven: one entry in `SLASH_COMMANDS` in `ui/notes/commands.ts`, nothing else. Say you want a "Warning" block that is a callout:
 
-- `ui/terminal/session.ts`: `TerminalSession`, the WebSocket client (binary frames = raw PTY bytes both ways; text frames are JSON: `resize` out, `exit` and `error` in). It takes a socket factory so `session.test.ts` drives it with a fake socket. No React, no xterm.
-- `ui/terminal/prefs.ts`: `localStorage['chalk:terminal']` = `{open, height}` (always try/catch) and the height clamp (120 px to 70% of the window).
-- `ui/terminal/terminalStore.ts`: its own tiny store (not `AppState`: sessions and xterm instances are not serializable and must outlive page switches). It owns the tabs, the bridge status (`/health`, `/profiles`; polling every 3 s while the panel is open and the bridge offline), the xterm instances (one hidden `.terminal-host` div per tab, so hiding the panel or switching tabs never loses output) and the `--terminal-h` CSS variable on `<html>` (0px when hidden).
-- `ui/terminal/TerminalPanel.tsx`: the button and the panel (tab strip, profile menu, resize grip, offline and "process exited" overlays), read through `useSyncExternalStore`.
-- xterm (`@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`) is imported dynamically the first time a session is created, so it is a separate chunk. It uses the DOM renderer, so the e2e suite reads `.xterm-rows`.
-- Layout: `.stage` has `bottom: var(--terminal-h)` and every bottom-anchored island adds `var(--terminal-h)` to its offset. A new bottom-anchored element must do the same.
-- Keys: `input/keyboard.ts` handles only Ctrl+\` (it dispatches the window event `TERMINAL_TOGGLE_EVENT`; `input/` may not import `ui/`). For any target inside `.terminal-panel`, Ctrl+S, Ctrl+=, Ctrl+-, Ctrl+0 and all plain keys are left alone; Ctrl+C copies via a hidden textarea when text is selected (`navigator.clipboard` does not exist on the e2e origin).
-- Folder rule: `ui/terminal/` may import anything below `ui/`, but `session.ts` and `prefs.ts` stay free of React and xterm so they remain unit-testable in plain node. Only `terminalStore.ts` touches xterm.
-- The bridge URL comes from `GET /api/config` (`terminalUrl`, env `CHALK_TERMINAL_URL`). The e2e suite points it at the `term-test` service, whose only profile is the Linux `shell`.
+```ts
+{ id: 'warning', title: 'Warning', aliases: ['warn', 'danger'], group: 'Basic blocks', icon: '!', description: 'A callout that stands out',
+  run: (e, r) => startFrom(e, r).toggleCallout().run() },
+```
+
+`id` is the test id suffix (`slash-item-warning`), `aliases` are what `/warn` matches (titles and aliases, prefix matches first), `group` is one of `COMMAND_GROUPS`, and `run(editor, range, ctx)` must delete the typed `/query` itself, which is what `startFrom` does (focus, then `deleteRange`). Chain whatever Tiptap command you need after it. Commands that need UI (the table size step, the link prompt, creating a page) call a `ctx` method instead; to add one, extend `SlashContext` and implement it in `SlashMenu.tsx`. The filter and ranking are pure (`filterCommands`) and tested in `commands.test.ts`; add a case there if your aliases collide with existing ones. Add the command to the README slash table too.
+
+### Add a notes block
+
+A block is a Tiptap node plus CSS, and optionally a slash entry. `ui/notes/extensions/callout.ts` is the smallest example.
+
+1. **The node.** Create `ui/notes/extensions/<name>.ts` with `Node.create({ name, group: 'block', content: 'block+', parseHTML, renderHTML, addCommands })`. Add a command (for example `toggleCallout`) and declare it in the `declare module '@tiptap/core'` block so it type-checks. Keep attributes JSON-friendly: the document is stored as ProseMirror JSON in the page file.
+2. **Register it** in the list in `ui/notes/editor.ts` (`createNotesExtensions`). A node type that is not registered is dropped by Tiptap when a page loads, so an older Chalk that opens a page with your block loses it on its next save. Adding a node needs no migration (the stored JSON stays valid), but one that changes the meaning of existing content does: bump the scene version, see "Change the scene file format".
+3. **Style it** in the notes section of `ui/styles.css` under `.notes-editor` (for the callout: `.notes-editor div[data-callout]`). Sizes are in world px at 16px base, because the column scales with the page zoom. Use the dark tokens from `:root`.
+4. **Optional entry points.** A slash entry (previous recipe), and a markdown shortcut as an input rule in `ui/notes/extensions/markdownRules.ts`. Add a row to `SHORTCUTS` in `input/keyboard.ts` for any new key or rule (the help dialog renders it) and to the README.
+5. **Tests.** A node with logic gets a unit test next to it (see `blockMove.test.ts`); add its scenario to `e2e/tests/notes.spec.ts`, reading the document through `__CHALK__.getNotes()` / `getNotesText()`. If the node holds data that must survive a load, check `core/notes.ts` (`restoreNotes`) does not reject it: it only limits depth, node count and text size, and leaves unknown types for Tiptap.
 
 ### Add a built-in terminal profile
 
@@ -178,13 +221,23 @@ Profiles are decided by the bridge, never by the browser (the browser only sends
 ```sh
 docker compose -f compose.test.yaml run --rm web-unit        # typecheck + unit tests
 docker compose -f compose.test.yaml run --rm api-unit        # backend tests
+docker compose -f compose.tools.yaml run --rm bridge-unit        # terminal bridge (Go)
 docker compose -f compose.test.yaml up --build --force-recreate --abort-on-container-exit --exit-code-from e2e app-test e2e
+docker compose -f compose.test.yaml down
+```
+
+The whole e2e run takes about ten minutes, so when a single tool call has a time limit run it in two halves by file name, against the same running stack:
+
+```sh
+docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test term-test
+docker compose -f compose.test.yaml run --rm --build e2e npx playwright test 'tests/[a-n]*'
+docker compose -f compose.test.yaml run --rm e2e npx playwright test 'tests/[o-z]*'
 docker compose -f compose.test.yaml down
 ```
 
 The pen and touch specs (`e2e/tests/pen-touch.spec.ts`) dispatch synthetic `PointerEvent`s with `pointerType` `pen` or `touch` through the helpers `ptrEvents`, `penStroke`, `penEraserDrag`, `penBarrelDrag`, `fingerDrag`, `fingerTap` and `pinch` (Playwright's mouse cannot produce them).
 
-The browser suite drives the real app with `page.mouse` and reads state through `window.__CHALK__` (`testing/testHook.ts`): `getElements()`, `getSelectedIds()`, `getAppState()`, `worldToScreen()`, `getElementScreenBounds(id)`, `flushSave()`, `whenRendered()`. It never sleeps; it polls. Test ids come from `testids.ts`, so UI and tests cannot drift apart.
+The browser suite drives the real app with `page.mouse` and reads state through `window.__CHALK__` (`testing/testHook.ts`): `getElements()`, `getSelectedIds()`, `getAppState()`, `worldToScreen()`, `getElementScreenBounds(id)`, `flushSave()`, `whenRendered()`, and for the notes `getNotes()` (a deep copy of the ProseMirror JSON) and `getNotesText()` (plain text, blocks joined by a newline), with `notesActive` in `getAppState()`. The terminal specs need the `term-test` service (the Linux build of the bridge); the notes specs are `notes-editor`, `notes-menus` and `notes`. It never sleeps; it polls. Test ids come from `testids.ts`, so UI and tests cannot drift apart.
 
 Tips when writing an e2e test:
 
