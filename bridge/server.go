@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -203,7 +204,12 @@ func (s *Server) runSession(conn *websocket.Conn, prof Profile, cols, rows int) 
 	_ = p.Resize(cols, rows)
 
 	home, _ := os.UserHomeDir()
-	cmd := p.Command(prof.Command, prof.Args...)
+	// Resolve through PATH first: on Windows the pty package would otherwise look for the bare name in cmd.Dir.
+	command := prof.Command
+	if resolved, err := exec.LookPath(command); err == nil {
+		command = resolved
+	}
+	cmd := p.Command(command, prof.Args...)
 	cmd.Dir = expandCwd(prof.Cwd, home)
 	cmd.Env = buildEnv(os.Environ(), prof)
 	prepareCmd(cmd)
