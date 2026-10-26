@@ -177,8 +177,8 @@ export async function seededBoard(
 // Scene builders
 // ---------------------------------------------------------------------------
 
-export function scene(elements: object[]): { type: 'chalk/scene'; version: 2; elements: object[] } {
-  return { type: 'chalk/scene', version: 2, elements };
+export function scene(elements: object[]): { type: 'chalk/scene'; version: 3; elements: object[] } {
+  return { type: 'chalk/scene', version: 3, elements };
 }
 export function shapeEl(
   kind: 'rectangle' | 'diamond' | 'ellipse' | 'triangle',

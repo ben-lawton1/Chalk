@@ -8,7 +8,7 @@ import pytest
 from app.models import MAX_SCENE_BYTES
 
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
-EMPTY = {"type": "chalk/scene", "version": 2, "elements": []}
+EMPTY = {"type": "chalk/scene", "version": 3, "elements": []}
 
 
 def test_create_default(client):

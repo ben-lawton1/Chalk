@@ -39,7 +39,7 @@ export function getPanelModel(s: Pick<AppState, 'elements' | 'selectedIds' | 'to
     for (const el of selected) {
       if (el.type === 'shape') { shape = true; if (el.shape === 'rectangle') rect = true; }
       else if (el.type === 'arrow') arrow = true;
-      else text = true;
+      else if (el.type === 'text') text = true;
     }
   } else if (s.tool === 'arrow' || s.tool === 'line') {
     arrow = true;

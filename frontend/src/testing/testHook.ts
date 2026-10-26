@@ -28,9 +28,11 @@ export function installTestHook(): void {
         editingId: s.editing?.id ?? null, boardId: s.board?.id ?? null, boardName: s.board?.name ?? null,
         boardVersion: s.board?.version ?? null, saveStatus: s.saveStatus, canUndo: s.canUndo, canRedo: s.canRedo,
         dialog: s.dialog,
+        pens: s.pens.map((p) => ({ ...p })), activePen: s.activePen, penButtonsSwapped: s.penButtonsSwapped, penTrayOpen: s.penTrayOpen,
         interaction: {
           marquee: s.interaction.marquee, bindTargetId: s.interaction.bindTarget?.elementId ?? null,
           hoverId: s.interaction.hoverId, dropPreview: s.interaction.dropPreview, gestureActive: s.interaction.gestureActive,
+          lassoActive: s.interaction.lasso !== null, liveInkPoints: s.interaction.liveInk?.points.length ?? 0,
         },
       };
     },

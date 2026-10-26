@@ -43,7 +43,7 @@ Folder rules (nothing imports "upwards", so there are no cycles):
 | `persistence/*` | types, constants, `core/*`, `state/*` |
 | `ui/*`, `main.tsx` | anything |
 
-Inside `core/` the order is `math -> ids -> viewport -> shapes -> text -> geometry -> binding -> scene -> serialize`; a module imports only modules before it.
+Inside `core/` the order is `math -> ids -> viewport -> shapes -> text -> ink -> geometry -> binding -> scene -> serialize`; a module imports only modules before it.
 
 ### Coding rules worth knowing
 

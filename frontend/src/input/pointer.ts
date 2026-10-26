@@ -85,15 +85,28 @@ export function handleWheel(e: WheelEvent): void {
 
 function buildInfo(canvas: HTMLCanvasElement, e: MouseEvent): PointerInfo {
   const rect = canvas.getBoundingClientRect();
+  const v = getState().viewport;
   const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const pe = e as Partial<PointerEvent>;
+  const pointerType = pe.pointerType === 'pen' || pe.pointerType === 'touch' ? pe.pointerType : 'mouse';
+  const pressure = typeof pe.pressure === 'number' ? pe.pressure : 0.5;
+  // Every sample the browser coalesced into this event (pens report far more often than frames), else the event itself.
+  const coalesced = typeof pe.getCoalescedEvents === 'function' ? pe.getCoalescedEvents() : [];
+  const samples = (coalesced.length > 0 ? coalesced : [e as PointerEvent]).map((c) => ({
+    world: screenToWorld({ x: c.clientX - rect.left, y: c.clientY - rect.top }, v),
+    pressure: typeof c.pressure === 'number' ? c.pressure : pressure,
+  }));
   return {
-    world: screenToWorld(screen, getState().viewport),
+    world: screenToWorld(screen, v),
     screen,
     shift: e.shiftKey,
     alt: e.altKey,
     mod: e.ctrlKey || e.metaKey,
     button: e.button,
     buttons: e.buttons,
+    pointerType,
+    pressure,
+    samples,
   };
 }
 

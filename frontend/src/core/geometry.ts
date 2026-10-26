@@ -3,19 +3,21 @@ import type {
   ArrowElement, BindableElement, ChalkElement, EndpointId, HandleId, HandleMode, HitResult, Outline, Point, Rect, Viewport,
 } from '../types';
 import {
-  ARROW_LABEL_BG_PAD, ENDPOINT_HIT_PX, HANDLE_HIT_PX, HIT_TOLERANCE_PX, SELECTION_PADDING_PX, SIDE_HANDLE_MIN_PX,
+  ARROW_LABEL_BG_PAD, ENDPOINT_HIT_PX, HANDLE_HIT_PX, HIT_TOLERANCE_PX, LASSO_MIN_INSIDE, SELECTION_PADDING_PX, SIDE_HANDLE_MIN_PX,
 } from '../constants';
 import { distToSegment, expandRect, rectContainsPoint, rectContainsRect, rectFromPoints, unionRects } from './math';
 import { worldToScreen } from './viewport';
 import { SHAPES } from './shapes';
 import { layoutText } from './text';
+import { distanceToInk } from './ink';
 
 // ---------------------------------------------------------------------------
 // Bounds
 // ---------------------------------------------------------------------------
 
-/** Shape/text: its own rect. Arrow: the start-end rect united with its label box. */
+/** Shape/text: its own rect. Ink: its points box grown by half the pen size. Arrow: the start-end rect united with its label box. */
 export function getBounds(el: ChalkElement): Rect {
+  if (el.type === 'ink') return expandRect({ x: el.x, y: el.y, width: el.width, height: el.height }, el.style.strokeWidth / 2);
   if (el.type !== 'arrow') return { x: el.x, y: el.y, width: el.width, height: el.height };
   const base = rectFromPoints(el.start, el.end);
   const l = el.label === '' ? null : layoutText(el);
@@ -131,14 +133,15 @@ export function rayExit(o: Outline, origin: Point, dir: Point): Point | null {
 // Hit testing (spec section 10)
 // ---------------------------------------------------------------------------
 
-/** max(HIT_TOLERANCE_PX / zoom, strokeWidth / 2), in world units. */
-export function hitTolerance(el: ChalkElement, zoom: number): number {
-  return Math.max(HIT_TOLERANCE_PX / zoom, el.style.strokeWidth / 2);
+/** max(tolerancePx / zoom, strokeWidth / 2), in world units. Fingers pass a larger tolerancePx. */
+export function hitTolerance(el: ChalkElement, zoom: number, tolerancePx = HIT_TOLERANCE_PX): number {
+  return Math.max(tolerancePx / zoom, el.style.strokeWidth / 2);
 }
 
-export function hitTestElement(el: ChalkElement, p: Point, zoom: number): 'strong' | 'hollow' | null {
-  const tol = hitTolerance(el, zoom);
+export function hitTestElement(el: ChalkElement, p: Point, zoom: number, tolerancePx = HIT_TOLERANCE_PX): 'strong' | 'hollow' | null {
+  const tol = hitTolerance(el, zoom, tolerancePx);
   if (!rectContainsPoint(expandRect(getBounds(el), tol), p)) return null;
+  if (el.type === 'ink') return distanceToInk(el, { x: p.x, y: p.y }) <= tol + el.style.strokeWidth / 2 ? 'strong' : null;
   if (el.type === 'shape') {
     const o = getOutline(el);
     if (distanceToOutline(o, p) <= tol) return 'strong';
@@ -153,12 +156,12 @@ export function hitTestElement(el: ChalkElement, p: Point, zoom: number): 'stron
 }
 
 /** Pass 1: top-most strong hit. Pass 2: the smallest hollow hit (ties: top-most). */
-export function hitTest(elements: readonly ChalkElement[], p: Point, zoom: number): HitResult | null {
+export function hitTest(elements: readonly ChalkElement[], p: Point, zoom: number, tolerancePx = HIT_TOLERANCE_PX): HitResult | null {
   let hollow: ChalkElement | null = null;
   let hollowArea = Infinity;
   for (let i = elements.length - 1; i >= 0; i--) {
     const el = elements[i]!;
-    const h = hitTestElement(el, p, zoom);
+    const h = hitTestElement(el, p, zoom, tolerancePx);
     if (h === 'strong') return { element: el, hollow: false };
     if (h === 'hollow') {
       const b = getBounds(el);
@@ -176,6 +179,52 @@ export function hitTest(elements: readonly ChalkElement[], p: Point, zoom: numbe
 export function elementsInRect(elements: readonly ChalkElement[], r: Rect): string[] {
   const out: string[] = [];
   for (const el of elements) if (rectContainsRect(r, getBounds(el))) out.push(el.id);
+  return out;
+}
+
+/** At most this many sample points are taken from one ink stroke for the lasso test. */
+const LASSO_INK_SAMPLES = 64;
+
+function lassoSamples(el: ChalkElement): Point[] {
+  if (el.type === 'ink') {
+    const pts = el.points;
+    const step = Math.max(1, Math.ceil(pts.length / LASSO_INK_SAMPLES));
+    const out: Point[] = [];
+    for (let i = 0; i < pts.length; i += step) out.push({ x: el.x + pts[i]!.x, y: el.y + pts[i]!.y });
+    const last = pts[pts.length - 1];
+    if (last && (pts.length - 1) % step !== 0) out.push({ x: el.x + last.x, y: el.y + last.y });
+    return out;
+  }
+  if (el.type === 'arrow') return [el.start, el.end, { x: (el.start.x + el.end.x) / 2, y: (el.start.y + el.end.y) / 2 }];
+  const b = getBounds(el);
+  const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  if (el.type === 'shape') {
+    const o = getOutline(el);
+    if (o.kind === 'polygon') return [...o.points, centre];
+    const out: Point[] = [centre];
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      out.push({ x: o.cx + Math.cos(a) * o.rx, y: o.cy + Math.sin(a) * o.ry });
+    }
+    return out;
+  }
+  return [
+    { x: b.x, y: b.y }, { x: b.x + b.width, y: b.y }, { x: b.x + b.width, y: b.y + b.height }, { x: b.x, y: b.y + b.height }, centre,
+  ];
+}
+
+/** Ids, in z-order, of the elements with at least LASSO_MIN_INSIDE of their sample points inside the (closed) world polygon. */
+export function elementsInLasso(elements: readonly ChalkElement[], polygon: readonly Point[]): string[] {
+  if (polygon.length < 3) return [];
+  const outline: Outline = { kind: 'polygon', points: [...polygon] };
+  const out: string[] = [];
+  for (const el of elements) {
+    const samples = lassoSamples(el);
+    if (samples.length === 0) continue;
+    let inside = 0;
+    for (const s of samples) if (isPointInsideOutline(outline, s)) inside++;
+    if (inside / samples.length >= LASSO_MIN_INSIDE) out.push(el.id);
+  }
   return out;
 }
 
@@ -234,10 +283,10 @@ export function getHandlePositions(box: Rect, v: Viewport, mode: 'box' | 'text')
   return out;
 }
 
-/** Corners are tested before sides. A handle is hit when max(|dx|, |dy|) <= HANDLE_HIT_PX / 2. */
-export function hitHandle(box: Rect, screen: Point, v: Viewport, mode: 'box' | 'text'): HandleId | null {
+/** Corners are tested before sides. A handle is hit when max(|dx|, |dy|) <= hitPx / 2 (finger and pen pass a larger hitPx). */
+export function hitHandle(box: Rect, screen: Point, v: Viewport, mode: 'box' | 'text', hitPx = HANDLE_HIT_PX): HandleId | null {
   const pos = getHandlePositions(box, v, mode);
-  const half = HANDLE_HIT_PX / 2;
+  const half = hitPx / 2;
   for (const h of [...CORNERS, ...SIDES]) {
     const hp = pos[h];
     if (hp && Math.max(Math.abs(screen.x - hp.x), Math.abs(screen.y - hp.y)) <= half) return h;
@@ -245,13 +294,13 @@ export function hitHandle(box: Rect, screen: Point, v: Viewport, mode: 'box' | '
   return null;
 }
 
-/** The nearer arrow end within ENDPOINT_HIT_PX of the screen point (ties go to 'end'), else null. */
-export function hitEndpoint(a: ArrowElement, screen: Point, v: Viewport): EndpointId | null {
+/** The nearer arrow end within hitPx (default ENDPOINT_HIT_PX) of the screen point (ties go to 'end'), else null. */
+export function hitEndpoint(a: ArrowElement, screen: Point, v: Viewport, hitPx = ENDPOINT_HIT_PX): EndpointId | null {
   const s = worldToScreen(a.start, v);
   const e = worldToScreen(a.end, v);
   const ds = Math.hypot(screen.x - s.x, screen.y - s.y);
   const de = Math.hypot(screen.x - e.x, screen.y - e.y);
-  if (Math.min(ds, de) > ENDPOINT_HIT_PX) return null;
+  if (Math.min(ds, de) > hitPx) return null;
   return de <= ds ? 'end' : 'start';
 }
 

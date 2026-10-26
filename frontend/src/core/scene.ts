@@ -7,6 +7,7 @@ import { add, clamp, rectCenter, rectFromPoints, safeDiv, sgn } from './math';
 import { newId, newSeed } from './ids';
 import { requiredShapeHeight, withMeasuredText } from './text';
 import { getCommonBounds, isBindable } from './geometry';
+import { transformInk } from './ink';
 import { indexById, unbindFrom, updateBoundArrows } from './binding';
 
 // ---------------------------------------------------------------------------
@@ -40,8 +41,9 @@ export function getElement(elements: readonly ChalkElement[], id: string): Chalk
   return undefined;
 }
 
-/** text.text, or the label of a shape/arrow. */
+/** text.text, or the label of a shape/arrow. Ink has no text. */
 export function getElementText(el: ChalkElement): string {
+  if (el.type === 'ink') return '';
   return el.type === 'text' ? el.text : el.label;
 }
 
@@ -167,6 +169,7 @@ export function resizeElements(
   const mapX = (x: number): number => (hx === 0 && !keepAspect ? x : AX + (x - AX) * sx);
   const mapY = (y: number): number => (hy === 0 && !keepAspect ? y : AY + (y - AY) * sy);
   const fontScale = single ? Math.abs(sx) : isCorner ? Math.sqrt(Math.abs(sx * sy)) : 1;
+  const inkWidthScale = Math.sqrt(Math.abs(sx * sy));
 
   const next = base.map((el): ChalkElement => {
     if (!idSet.has(el.id)) return el;
@@ -185,6 +188,7 @@ export function resizeElements(
       const width = el.autoResize ? el.width : Math.max(fontSize, el.width * Math.abs(sx));
       return withMeasuredText({ ...el, x: r.x, y: r.y, width, style: { ...el.style, fontSize } });
     }
+    if (el.type === 'ink') return transformInk(el, mapX, mapY, inkWidthScale);
     return {
       ...el,
       start: { x: mapX(el.start.x), y: mapY(el.start.y) },
@@ -315,7 +319,7 @@ export function applyStyleToElements(elements: readonly ChalkElement[], ids: rea
 /** Sets the text of a text element or the label of a shape/arrow, resizing and re-routing as needed. Input array if unchanged. */
 export function setElementText(elements: readonly ChalkElement[], id: string, text: string): readonly ChalkElement[] {
   const el = getElement(elements, id);
-  if (!el || getElementText(el) === text) return elements;
+  if (!el || el.type === 'ink' || getElementText(el) === text) return elements;
   let next: ChalkElement;
   if (el.type === 'text') next = withMeasuredText({ ...el, text });
   else if (el.type === 'shape') next = fitShapeToLabel({ ...el, label: text });

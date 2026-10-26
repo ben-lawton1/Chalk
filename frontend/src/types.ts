@@ -141,8 +141,28 @@ export interface ArrowElement extends ElementBase {
   label: string;
 }
 
+/** One sample of a freehand stroke, relative to the stroke's (x, y). */
+export interface InkPoint {
+  x: number;
+  y: number;
+  /** 0..1 */
+  p: number;
+}
+
+/** A freehand stroke. Points are RELATIVE to (x, y) = the min corner of the points; width/height = their extent. */
+export interface InkElement extends ElementBase {
+  type: 'ink';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  points: InkPoint[];
+  /** true = p came from a pressure-sensitive pen; false = the renderer simulates pressure from speed. */
+  pressure: boolean;
+}
+
 /** Named ChalkElement (NOT `Element`) so it never shadows the DOM global. */
-export type ChalkElement = ShapeElement | TextElement | ArrowElement;
+export type ChalkElement = ShapeElement | TextElement | ArrowElement | InkElement;
 /** Elements an arrow end may bind to. */
 export type BindableElement = ShapeElement | TextElement;
 export type ElementType = ChalkElement['type'];
@@ -169,6 +189,12 @@ export type EndpointId = 'start' | 'end';
 export type HandleMode = 'none' | 'box' | 'text' | 'endpoints';
 export type ReorderDir = 'front' | 'back' | 'forward' | 'backward';
 export type ToolId = 'select' | 'hand' | ShapeKind | 'arrow' | 'line' | 'text';
+
+/** One of the three configurable pens. `size` is the stroke width in world px. */
+export interface PenSettings {
+  color: string;
+  size: number;
+}
 
 /** Result of laying out the text of a text element, a shape label or an arrow label. */
 export interface TextLayout {
@@ -237,6 +263,12 @@ export interface Interaction {
   /** True between pointerdown and pointerup on the canvas. */
   gestureActive: boolean;
   dropPreview: DropPreview | null;
+  /** Freehand stroke being drawn (pen tool); committed on pointer up. */
+  liveInk: InkElement | null;
+  /** World points of the lasso being drawn. */
+  lasso: Point[] | null;
+  /** World position of the eraser ring while erasing. */
+  eraser: Point | null;
 }
 
 export type SaveStatus = 'loading' | 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
@@ -283,6 +315,12 @@ export interface AppState {
   sidebarOpen: boolean;
   dialog: DialogId;
   toast: ToastState | null;
+  /** Always 3 pens. */
+  pens: PenSettings[];
+  activePen: number;
+  /** Swaps which pen button erases and which lassos (for styluses that report them the other way round). */
+  penButtonsSwapped: boolean;
+  penTrayOpen: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +339,11 @@ export interface PointerInfo {
   button: number;
   /** MouseEvent.buttons bitmask. Informational only: tools never read it; the pointer router alone decides what is a gesture. */
   buttons: number;
+  pointerType: 'mouse' | 'pen' | 'touch';
+  /** 0..1 */
+  pressure: number;
+  /** Coalesced samples of this event (world + pressure); at least the event itself. Used for ink. */
+  samples: { world: Point; pressure: number }[];
 }
 
 export interface Tool {
@@ -348,7 +391,7 @@ export interface ShapeDef {
 /** The one serialization format: downloads, API `scene`, clipboard payload. UI state is never included. */
 export interface SceneFile {
   type: 'chalk/scene';
-  version: 2;
+  version: 3;
   elements: ChalkElement[];
 }
 
@@ -418,7 +461,7 @@ export interface ShortcutInfo {
   /** Display string, e.g. 'Ctrl + Z'. */
   keys: string;
   description: string;
-  group: 'Tools' | 'Edit' | 'View' | 'File';
+  group: 'Tools' | 'Edit' | 'View' | 'File' | 'Pen & touch';
 }
 
 // ---------------------------------------------------------------------------
@@ -438,12 +481,18 @@ export interface ChalkTestAppState {
   canUndo: boolean;
   canRedo: boolean;
   dialog: DialogId;
+  pens: PenSettings[];
+  activePen: number;
+  penButtonsSwapped: boolean;
+  penTrayOpen: boolean;
   interaction: {
     marquee: Rect | null;
     bindTargetId: string | null;
     hoverId: string | null;
     dropPreview: DropPreview | null;
     gestureActive: boolean;
+    lassoActive: boolean;
+    liveInkPoints: number;
   };
 }
 

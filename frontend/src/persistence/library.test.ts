@@ -37,7 +37,7 @@ const tree = (...pages: BoardSummary[]): LibraryTree => ({
   notebooks: [{ name: 'Work', sections: [{ name: 'Projects', pages }] }],
 });
 const full = (p: BoardSummary): Board => ({
-  ...p, createdAt: 'x', scene: { type: 'chalk/scene', version: 2, elements: [] },
+  ...p, createdAt: 'x', scene: { type: 'chalk/scene', version: 3, elements: [] },
 });
 const here = (over: Record<string, unknown> = {}) => ({
   id: 'p1', name: 'Roadmap', version: 1, notebook: 'Work', section: 'Projects', ...over,

@@ -24,6 +24,7 @@ interface EditorGeometry {
 
 /** Spec section 13.3 layout table. */
 function editorGeometry(el: ChalkElement): EditorGeometry {
+  if (el.type === 'ink') return { left: el.x, top: el.y, width: el.width, height: el.height, wrapping: false, align: 'left' }; // never edited
   const layout = layoutForEditing(el);
   const fs = el.style.fontSize;
   const lh = lineHeightPx(fs);

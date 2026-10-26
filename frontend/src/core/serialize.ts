@@ -1,6 +1,6 @@
 // Scene file parsing, migrations and defensive restore of imported elements (WP1).
 import type {
-  ArrowElement, Binding, ChalkElement, Point, SceneFile, ShapeElement, Style, TextElement,
+  ArrowElement, Binding, ChalkElement, InkPoint, Point, SceneFile, ShapeElement, Style, TextElement,
 } from '../types';
 import {
   ARROWHEADS, DEFAULT_STYLE, EDGES, FILL_STYLES, FONT_FAMILIES, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE, SCENE_FILE_TYPE,
@@ -9,6 +9,7 @@ import {
 import { clamp } from './math';
 import { isValidSeed, newId, newSeed } from './ids';
 import { isShapeKind } from './shapes';
+import { normaliseInk } from './ink';
 import { withMeasuredText } from './text';
 import { getCommonBounds, isBindable } from './geometry';
 import { moveElements } from './scene';
@@ -54,6 +55,8 @@ function migrateV1ToV2(file: Record<string, unknown>): Record<string, unknown> {
 /** n -> n + 1 migrations applied by parseSceneFile. */
 export const MIGRATIONS: Record<number, (file: Record<string, unknown>) => Record<string, unknown>> = {
   1: migrateV1ToV2,
+  /** v2 -> v3 added the `ink` element; v2 files need no change. The bump stops an old cached tab from dropping ink when it saves. */
+  2: (f) => f,
 };
 
 export function toSceneFile(elements: readonly ChalkElement[]): SceneFile {
@@ -112,6 +115,17 @@ function restorePoint(raw: unknown): Point | null {
   return isPlainObject(raw) && isFiniteNumber(raw.x) && isFiniteNumber(raw.y) ? { x: raw.x, y: raw.y } : null;
 }
 
+/** Valid ink samples only (p clamped to 0..1, default 0.5); null when the stroke has none. */
+function restoreInkPoints(raw: unknown): InkPoint[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: InkPoint[] = [];
+  for (const q of raw) {
+    if (!isPlainObject(q) || !isFiniteNumber(q.x) || !isFiniteNumber(q.y)) continue;
+    out.push({ x: q.x, y: q.y, p: isFiniteNumber(q.p) ? clamp(q.p, 0, 1) : 0.5 });
+  }
+  return out.length > 0 ? out : null;
+}
+
 function restoreBinding(raw: unknown, bindableIds: ReadonlySet<string>): Binding | null {
   if (!isPlainObject(raw) || typeof raw.elementId !== 'string' || !bindableIds.has(raw.elementId)) return null;
   const fp = raw.fixedPoint;
@@ -128,7 +142,7 @@ export function restoreElements(raw: readonly unknown[]): ChalkElement[] {
   for (const item of raw) {
     if (!isPlainObject(item)) continue;
     const type = item.type;
-    if (type !== 'shape' && type !== 'text' && type !== 'arrow') continue;
+    if (type !== 'shape' && type !== 'text' && type !== 'arrow' && type !== 'ink') continue;
 
     let id = typeof item.id === 'string' && item.id !== '' ? item.id : newId();
     while (used.has(id)) id = newId();
@@ -155,6 +169,14 @@ export function restoreElements(raw: readonly unknown[]): ChalkElement[] {
       });
       used.add(id);
       result.push(el);
+    } else if (type === 'ink') {
+      if (!isFiniteNumber(item.x) || !isFiniteNumber(item.y)) continue;
+      const rel = restoreInkPoints(item.points);
+      if (!rel) continue;
+      // Extent and origin are recomputed from the points; the file's width/height are never trusted.
+      const geo = normaliseInk(rel.map((q) => ({ x: item.x as number + q.x, y: item.y as number + q.y, p: q.p })));
+      used.add(id);
+      result.push({ id, seed, type: 'ink', ...geo, pressure: item.pressure === true, style });
     } else {
       const start = restorePoint(item.start);
       const end = restorePoint(item.end);

@@ -11,6 +11,7 @@ import type {
   Edges,
   FillStyle,
   FontFamily,
+  PenSettings,
   StrokeStyle,
   Style,
   TextAlign,
@@ -22,7 +23,7 @@ import type {
 export const APP_NAME = 'Chalk';
 export const APP_VERSION = '0.1.0';
 export const SCENE_FILE_TYPE = 'chalk/scene' as const;
-export const SCENE_FILE_VERSION = 2 as const;
+export const SCENE_FILE_VERSION = 3 as const;
 
 // ---------------------------------------------------------------------------
 // Viewport
@@ -189,3 +190,42 @@ export const DEFAULT_STYLE: Style = {
   startArrowhead: 'none',
   endArrowhead: 'arrow',
 };
+
+// ---------------------------------------------------------------------------
+// Pen, ink and touch (all tunable). *_PX are screen px, *_MS are milliseconds.
+// ---------------------------------------------------------------------------
+/** Pen colours, chosen for the dark canvas. Index i is rendered as data-testid `pen-color-${i}`. */
+export const PEN_COLORS = ['#e9ecef', '#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#4dabf7', '#b197fc', '#f783ac'] as const;
+/** Pen sizes (world px). Index i is rendered as data-testid `pen-size-${i}`. */
+export const PEN_SIZES = [2, 3, 5, 8, 12] as const;
+export const DEFAULT_PENS: readonly PenSettings[] = [
+  { color: '#e9ecef', size: 3 },
+  { color: '#ff6b6b', size: 3 },
+  { color: '#4dabf7', size: 5 },
+];
+/** perfect-freehand options: how much pressure thins the line, how much the outline is smoothed, how much the input is streamlined. */
+export const INK_THINNING = 0.6;
+export const INK_SMOOTHING = 0.5;
+export const INK_STREAMLINE = 0.45;
+/** Samples closer than this to the previous one (screen px) are skipped. */
+export const INK_MIN_SAMPLE_PX = 0.75;
+/** Eraser ring radius (screen px). */
+export const ERASER_RADIUS_PX = 10;
+/** An element is lassoed when at least this fraction of its sample points are inside the lasso. */
+export const LASSO_MIN_INSIDE = 0.7;
+/** Lasso points closer than this to the previous one (screen px) are skipped. */
+export const LASSO_MIN_SAMPLE_PX = 3;
+/** A touch that moves less than this (screen px) and lifts within TOUCH_TAP_MAX_MS is a tap. */
+export const TOUCH_TAP_SLOP_PX = 10;
+export const TOUCH_TAP_MAX_MS = 500;
+/** Two taps within this time (ms) and distance (screen px) are a double tap. */
+export const DOUBLE_TAP_MS = 350;
+export const DOUBLE_TAP_SLOP_PX = 30;
+/** Hit tolerance for finger taps and the selection box (screen px). */
+export const TOUCH_HIT_TOLERANCE_PX = 16;
+/** Handle hit size for a finger / a pen tip (screen px, like HANDLE_HIT_PX). */
+export const TOUCH_HANDLE_HIT_PX = 32;
+export const PEN_HANDLE_HIT_PX = 16;
+/** Touches are ignored this long (ms) after the last pen event (palm rejection). */
+export const PALM_GRACE_MS = 500;
+export const PEN_PREFS_STORAGE_KEY = 'chalk:pens';

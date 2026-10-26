@@ -209,7 +209,8 @@ export function startEditing(id: string, before?: Snapshot): void {
   const cur = getState().editing;
   if (cur && cur.id !== id) commitEditing();
   else if (cur) return;
-  if (!getElement(getState().elements, id)) return;
+  const target = getElement(getState().elements, id);
+  if (!target || target.type === 'ink') return; // ink has no text to edit
   const snap = before ?? takeSnapshot();
   setState({ editing: { id, before: snap }, selectedIds: [id] });
   setInteraction({ hoverId: null });
@@ -255,7 +256,8 @@ export function editSelection(): boolean {
   commitEditing();
   const sel = getState().selectedIds;
   if (sel.length !== 1) return false;
-  if (!getElement(getState().elements, sel[0]!)) return false;
+  const target = getElement(getState().elements, sel[0]!);
+  if (!target || target.type === 'ink') return false;
   startEditing(sel[0]!);
   return true;
 }

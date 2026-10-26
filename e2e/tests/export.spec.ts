@@ -57,7 +57,7 @@ test('EXP-1: export JSON', async ({ page, request }) => {
   const text = fs.readFileSync(await dl.path(), 'utf8');
   expect(text).toContain('\n  "type": "chalk/scene"');
   const parsed = JSON.parse(text);
-  expect(parsed).toEqual({ type: 'chalk/scene', version: 2, elements: await els(page) });
+  expect(parsed).toEqual({ type: 'chalk/scene', version: 3, elements: await els(page) });
   expect(parsed.elements).toHaveLength(2);
 });
 

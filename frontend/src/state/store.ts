@@ -1,6 +1,6 @@
 // Single app-state store: setState, subscribe, selection/interaction helpers, toasts (WP0).
 import type { AppState, ChalkElement, Interaction, Point, ToastState, Viewport } from '../types';
-import { DEFAULT_STYLE, TOAST_MS } from '../constants';
+import { DEFAULT_PENS, DEFAULT_STYLE, TOAST_MS } from '../constants';
 import { getCommonBounds } from '../core/geometry';
 import { clampViewport, pageOrigin } from '../core/viewport';
 
@@ -11,9 +11,12 @@ export function initialState(): AppState {
   return {
     elements: [], selectedIds: [], viewport: { scrollX: 0, scrollY: 0, zoom: 1 }, viewportSize: { width: 0, height: 0 },
     tool: 'select', toolLocked: false, currentStyle: { ...DEFAULT_STYLE }, editing: null,
-    interaction: { marquee: null, bindTarget: null, hoverId: null, cursor: null, gestureActive: false, dropPreview: null },
+    interaction: { marquee: null, bindTarget: null, hoverId: null, cursor: null, gestureActive: false, dropPreview: null,
+      liveInk: null, lasso: null, eraser: null,
+    },
     board: null, saveStatus: 'loading', canUndo: false, canRedo: false, dialog: 'none', toast: null,
     library: null, sidebarOpen: true,
+    pens: DEFAULT_PENS.map((p) => ({ ...p })), activePen: 0, penButtonsSwapped: false, penTrayOpen: false,
   };
 }
 

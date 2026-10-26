@@ -99,9 +99,9 @@ function arrowDrawables(el: ArrowElement, opts: Options): Drawable[] {
 let byObject = new WeakMap<ChalkElement, Drawable[]>();
 const lru = new Map<string, Drawable[]>();
 
-/** Drawables in element-local coordinates (translate by drawOrigin to draw). Text has none. */
+/** Drawables in element-local coordinates (translate by drawOrigin to draw). Text has none, and ink is not drawn by rough.js. */
 export function getDrawables(el: ChalkElement): readonly Drawable[] {
-  if (el.type === 'text') return [];
+  if (el.type === 'text' || el.type === 'ink') return [];
   const fast = byObject.get(el);
   if (fast) return fast;
   const key = shapeKey(el);

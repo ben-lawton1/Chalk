@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { ArrowElement, ChalkElement, Outline, Point, Rect, ShapeElement, ShapeKind, Style, TextElement } from '../types';
 import { DEFAULT_STYLE, HIT_TOLERANCE_PX } from '../constants';
 import { SHAPES } from './shapes';
+import { createInk } from './ink';
 import {
-  distanceToOutline, elementsInRect, getBounds, getCommonBounds, getHandleMode, getHandlePositions, getOutline,
+  distanceToOutline, elementsInLasso, elementsInRect, getBounds, getCommonBounds, getHandleMode, getHandlePositions, getOutline,
   getSelectionBox, handlePoint, HANDLE_CURSORS, hitEndpoint, hitHandle, hitTest, hitTestElement, hitTolerance,
   isBindable, isPointInsideOutline, rayExit,
 } from './geometry';
@@ -421,5 +422,77 @@ describe('selection and handles', () => {
     expect(HANDLE_CURSORS.s).toBe('ns-resize');
     expect(HANDLE_CURSORS.e).toBe('ew-resize');
     expect(HANDLE_CURSORS.w).toBe('ew-resize');
+  });
+});
+
+describe('ink: bounds, hit testing and handles', () => {
+  const stroke = (w = 4) => createInk([{ x: 100, y: 100, p: 0.5 }, { x: 200, y: 100, p: 0.5 }, { x: 200, y: 160, p: 0.5 }], false, { ...DEFAULT_STYLE, strokeWidth: w });
+
+  it('getBounds is the points box grown by half the pen size', () => {
+    expect(getBounds(stroke(10))).toEqual({ x: 95, y: 95, width: 110, height: 70 });
+  });
+  it('is never bindable and uses box handles', () => {
+    const s = stroke();
+    expect(isBindable(s)).toBe(false);
+    expect(getHandleMode([s], [s.id])).toBe('box');
+  });
+  it('hits near the line (strong) and misses inside the stroke corner (never hollow)', () => {
+    const s = stroke();
+    expect(hitTestElement(s, { x: 150, y: 104 }, 1)).toBe('strong');
+    expect(hitTestElement(s, { x: 150, y: 100 + HIT_TOLERANCE_PX + 2 + 4 }, 1)).toBeNull();
+    expect(hitTestElement(s, { x: 150, y: 130 }, 1)).toBeNull(); // inside the L, far from the line
+  });
+  it('a larger tolerancePx (fingers) reaches further', () => {
+    const s = stroke();
+    const p = { x: 150, y: 100 + 20 };
+    expect(hitTestElement(s, p, 1)).toBeNull();
+    expect(hitTestElement(s, p, 1, 24)).toBe('strong');
+    expect(hitTest([s], p, 1, 24)?.element.id).toBe(s.id);
+    expect(hitTolerance(s, 1, 30)).toBe(30);
+  });
+  it('hitHandle and hitEndpoint take a custom hit size', () => {
+    const box = rectOf(100, 100, 100, 100);
+    const v = { scrollX: 0, scrollY: 0, zoom: 1 };
+    const off = { x: 96 - 10, y: 96 }; // 10px left of the nw handle at (96, 96)
+    expect(hitHandle(box, off, v, 'box')).toBeNull();
+    expect(hitHandle(box, off, v, 'box', 32)).toBe('nw');
+    const a = mkArrow({ x: 0, y: 0 }, { x: 100, y: 0 });
+    expect(hitEndpoint(a, { x: 100, y: 14 }, v)).toBeNull();
+    expect(hitEndpoint(a, { x: 100, y: 14 }, v, 20)).toBe('end');
+  });
+});
+
+describe('elementsInLasso', () => {
+  const square = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300, y: 300 }, { x: 0, y: 300 }];
+
+  it('selects elements whose sample points are mostly inside, in z-order', () => {
+    const inside = mkShape('rectangle', 50, 50, 100, 80, { id: 'in' });
+    const outside = mkShape('rectangle', 400, 400, 50, 50, { id: 'out' });
+    const t = mkText(20, 200, 'hello', { id: 'txt' });
+    expect(elementsInLasso([inside, outside, t], square)).toEqual(['in', 'txt']);
+  });
+  it('ignores an element that is mostly outside', () => {
+    const straddle = mkShape('rectangle', 250, 50, 200, 80, { id: 'half' }); // 2 of 4 corners + centre outside
+    expect(elementsInLasso([straddle], square)).toEqual([]);
+  });
+  it('samples ellipses, arrows and ink', () => {
+    const ell = mkShape('ellipse', 100, 100, 100, 100, { id: 'ell' });
+    const arrow = mkArrow({ x: 10, y: 10 }, { x: 100, y: 100 }, { id: 'arr' });
+    const farArrow = mkArrow({ x: 10, y: 10 }, { x: 900, y: 900 }, { id: 'far' });
+    const ink = createInk([{ x: 20, y: 20, p: 0.5 }, { x: 60, y: 40, p: 0.5 }, { x: 90, y: 30, p: 0.5 }], false, DEFAULT_STYLE);
+    expect(elementsInLasso([ell, arrow, farArrow, ink], square)).toEqual(['ell', 'arr', ink.id]);
+  });
+  it('a long ink stroke is sampled and judged by the fraction inside', () => {
+    const pts = Array.from({ length: 200 }, (_, i) => ({ x: i * 2, y: 150, p: 0.5 })); // x from 0 to 398; 75% inside
+    expect(elementsInLasso([createInk(pts, false, DEFAULT_STYLE)], square)).toHaveLength(1);
+    const wide = Array.from({ length: 200 }, (_, i) => ({ x: i * 4, y: 150, p: 0.5 })); // x to 796; ~38% inside
+    expect(elementsInLasso([createInk(wide, false, DEFAULT_STYLE)], square)).toEqual([]);
+  });
+  it('works with a concave lasso and needs 3+ points', () => {
+    const c = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 100, y: 100 }, { x: 0, y: 200 }];
+    const notch = mkShape('rectangle', 80, 130, 40, 40, { id: 'notch' }); // sits in the notch of the "W"
+    const top = mkShape('rectangle', 80, 10, 40, 40, { id: 'top' });
+    expect(elementsInLasso([notch, top], c)).toEqual(['top']);
+    expect(elementsInLasso([top], [{ x: 0, y: 0 }, { x: 9, y: 9 }])).toEqual([]);
   });
 });

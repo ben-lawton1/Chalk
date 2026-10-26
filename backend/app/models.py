@@ -18,7 +18,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 SCENE_TYPE = "chalk/scene"
-SCENE_VERSION = 2
+SCENE_VERSION = 3
 MAX_SCENE_BYTES = 10_000_000
 DEFAULT_BOARD_NAME = "Untitled page"
 MAX_NAME_LENGTH = 120

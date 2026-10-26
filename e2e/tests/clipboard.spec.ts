@@ -121,7 +121,7 @@ test('CLP-5: the copy event carries chalk JSON', async ({ page, request }) => {
   await expect.poll(() => page.evaluate(() => (window as any).__copied ?? null)).not.toBeNull();
   const parsed = JSON.parse(await page.evaluate(() => (window as any).__copied));
   expect(parsed.type).toBe('chalk/scene');
-  expect(parsed.version).toBe(2);
+  expect(parsed.version).toBe(3);
   expect(parsed.elements).toHaveLength(1);
   expect((await app(page)).editingId).toBeNull();
 });

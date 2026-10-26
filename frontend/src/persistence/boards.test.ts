@@ -41,7 +41,7 @@ vi.mock('../state/actions');
 vi.mock('./backup');
 
 const el = (id: string): ChalkElement => ({ id }) as unknown as ChalkElement;
-const scene: SceneFile = { type: 'chalk/scene', version: 2, elements: [] };
+const scene: SceneFile = { type: 'chalk/scene', version: 3, elements: [] };
 const board = (id: string, over: Partial<Board> = {}): Board => ({
   id, name: 'Board ' + id, version: 3, updatedAt: 'x', createdAt: 'x', scene, notebook: 'NB', section: 'Sec', ...over,
 });
@@ -68,7 +68,7 @@ beforeEach(() => {
   resetState();
   clearHistory();
   vi.mocked(parseSceneFile).mockReturnValue([]);
-  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 2, elements: [...els] }));
+  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 3, elements: [...els] }));
   vi.mocked(readBackup).mockReturnValue(null);
 });
 
@@ -144,7 +144,7 @@ describe('initBoards', () => {
 describe('openBoard and backups', () => {
   const backupFor = (baseVersion: number): BoardBackup => ({
     boardId: 'b1', baseVersion, savedAt: 'x', name: 'Board b1',
-    scene: { type: 'chalk/scene', version: 2, elements: [el('mine')] },
+    scene: { type: 'chalk/scene', version: 3, elements: [el('mine')] },
   });
 
   it('restores a backup whose baseVersion matches and autosave sees it as dirty', async () => {
@@ -212,7 +212,7 @@ describe('openBoard and backups', () => {
   });
 
   it('a v1 scene is loaded migrated and left dirty so autosave writes the v2 file back', () => {
-    loadIntoState(board('b9', { scene: { type: 'chalk/scene', version: 1 as unknown as 2, elements: [] } }));
+    loadIntoState(board('b9', { scene: { type: 'chalk/scene', version: 1 as unknown as 3, elements: [] } }));
     expect(isDirty()).toBe(true);
   });
 

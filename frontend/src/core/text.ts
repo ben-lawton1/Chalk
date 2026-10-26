@@ -107,8 +107,9 @@ function maxLineWidth(lines: readonly string[], font: string): number {
   return w;
 }
 
-/** Layout of a text element, or of a shape/arrow label. null for an empty shape/arrow label. */
+/** Layout of a text element, or of a shape/arrow label. null for an empty shape/arrow label and for ink. */
 export function layoutText(el: ChalkElement): TextLayout | null {
+  if (el.type === 'ink') return null;
   const fontSize = el.style.fontSize;
   const font = fontString(fontSize, el.style.fontFamily);
   const lh = lineHeightPx(fontSize);

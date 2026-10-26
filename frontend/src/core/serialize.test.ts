@@ -1,8 +1,9 @@
 // Unit tests for core/serialize: scene file envelope and defensive restore (WP1).
 import { describe, expect, it } from 'vitest';
-import type { ArrowElement, ChalkElement, ShapeElement, TextElement } from '../types';
+import type { ArrowElement, ChalkElement, InkElement, ShapeElement, TextElement } from '../types';
 import { DEFAULT_STYLE, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE } from '../constants';
 import { isValidSeed } from './ids';
+import { createInk } from './ink';
 import { updateBoundArrows } from './binding';
 import { createArrow, createShape, createText, setElementText } from './scene';
 import { MIGRATIONS, parseSceneFile, restoreElements, restoreStyle, SceneParseError, toSceneFile } from './serialize';
@@ -32,8 +33,10 @@ describe('SceneParseError / MIGRATIONS', () => {
     expect(e.name).toBe('SceneParseError');
     expect(e.message).toBe('boom');
   });
-  it('MIGRATIONS has the v1 -> v2 step only', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
+  it('MIGRATIONS has the v1 -> v2 and the identity v2 -> v3 steps', () => {
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2']);
+    const f = { type: 'chalk/scene', version: 2, elements: [] };
+    expect(MIGRATIONS[2]!(f)).toBe(f);
   });
 });
 
@@ -54,7 +57,7 @@ describe('toSceneFile / parseSceneFile round trip', () => {
     const els = sampleScene();
     const f = toSceneFile(els);
     expect(f.type).toBe('chalk/scene');
-    expect(f.version).toBe(2);
+    expect(f.version).toBe(3);
     expect(f.elements).toEqual(els);
     expect(f.elements).not.toBe(els);
     expect(toSceneFile([]).elements).toEqual([]);
@@ -88,7 +91,7 @@ describe('parseSceneFile rejects bad envelopes', () => {
     expect(() => parseSceneFile(envelope([], { version: v }))).toThrow(SceneParseError);
   });
   it('rejects a future version with a clear message', () => {
-    expect(() => parseSceneFile(envelope([], { version: 3 }))).toThrow('This file was made by a newer Chalk');
+    expect(() => parseSceneFile(envelope([], { version: 4 }))).toThrow('This file was made by a newer Chalk');
     expect(() => parseSceneFile(envelope([], { version: 99 }))).toThrow(SceneParseError);
   });
   it('rejects when elements is not an array', () => {
@@ -461,5 +464,41 @@ describe('v1 -> v2 migration', () => {
     const out = parseSceneFile(v1([rawArrow({ start: { x: -100, y: 0 }, end: { x: 50, y: 40 } })])) as ArrowElement[];
     expect(out[0]!.start).toEqual({ x: 32, y: 32 });
     expect(out[0]!.end).toEqual({ x: 182, y: 72 });
+  });
+});
+
+describe('ink elements', () => {
+  const rawInk = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'ink1', seed: 7, type: 'ink', x: 10, y: 20, width: 999, height: 999, pressure: true,
+    points: [{ x: 0, y: 0, p: 0.2 }, { x: 30, y: 10, p: 0.8 }, { x: 60, y: 5, p: 0.5 }], style: { ...DEFAULT_STYLE, strokeWidth: 3 }, ...over,
+  });
+
+  it('round-trips through toSceneFile and parseSceneFile', () => {
+    const ink = createInk([{ x: 5, y: 6, p: 0.3 }, { x: 25.456, y: 16, p: 1 }], true, { ...DEFAULT_STYLE, strokeWidth: 3 });
+    const back = parseSceneFile(JSON.parse(JSON.stringify(toSceneFile([ink]))));
+    expect(back).toEqual([ink]);
+  });
+  it('recomputes width and height from the points, never trusting the file', () => {
+    const el = first<InkElement>(restoreElements([rawInk()]));
+    expect(el.type).toBe('ink');
+    expect([el.x, el.y, el.width, el.height]).toEqual([10, 20, 60, 10]);
+    expect(el.pressure).toBe(true);
+  });
+  it('clamps p to 0..1, defaults a missing p to 0.5 and drops invalid points', () => {
+    const el = first<InkElement>(restoreElements([rawInk({ points: [{ x: 0, y: 0, p: 7 }, { x: 'a', y: 1 }, { x: 4, y: 4 }, null] })]));
+    expect(el.points.map((q) => q.p)).toEqual([1, 0.5]);
+  });
+  it('defaults pressure to false', () => {
+    expect(first<InkElement>(restoreElements([rawInk({ pressure: 'yes' })])).pressure).toBe(false);
+  });
+  it.each([
+    ['no points', { points: [] }], ['points not an array', { points: 'x' }], ['only invalid points', { points: [{ x: NaN, y: 0 }] }],
+    ['non-finite x', { x: Infinity }], ['missing y', { y: undefined }],
+  ])('drops bad ink: %s', (_name, over) => {
+    expect(restoreElements([rawInk(over)])).toEqual([]);
+  });
+  it('loads a v2 file that has no ink, and a v3 file with ink', () => {
+    expect(parseSceneFile(envelope([rawShape()]))).toHaveLength(1);
+    expect(parseSceneFile(envelope([rawInk()], { version: 3 }))).toHaveLength(1);
   });
 });

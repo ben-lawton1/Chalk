@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { ArrowElement, Binding, ChalkElement, HandleId, Point, ShapeElement, ShapeKind, Style, TextElement } from '../types';
 import { DEFAULT_STYLE, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE } from '../constants';
 import { isValidSeed } from './ids';
+import { createInk } from './ink';
+import { getBounds } from './geometry';
 import { requiredShapeHeight } from './text';
 import {
   addElements, applyStyleToElements, cloneWithNewIds, createArrow, createShape, createText, duplicateElements, fitShapeToLabel,
@@ -819,5 +821,60 @@ describe('immutability', () => {
       setElementText(all, 'T', 'hello world');
       setArrowEndpoint(all, 'ar', 'end', { x: 5, y: 5 }, bind('L'));
     }).not.toThrow();
+  });
+});
+
+describe('ink elements', () => {
+  const mkInk = (id = 'k') => ({
+    ...createInk([{ x: 100, y: 100, p: 0.5 }, { x: 140, y: 120, p: 0.6 }, { x: 180, y: 100, p: 0.4 }], true, { ...DEFAULT_STYLE, strokeWidth: 4 }),
+    id,
+  });
+
+  it('moveElements only changes x/y, so the points array is shared', () => {
+    const k = mkInk();
+    const out = moveElements([k], ['k'], 10, -5);
+    const m = out[0] as typeof k;
+    expect([m.x, m.y]).toEqual([110, 95]);
+    expect(m.points).toBe(k.points);
+    expect(k.x).toBe(100);
+  });
+  it('duplicate gives a fresh id and seed, offset position, same points', () => {
+    const k = mkInk();
+    const { elements, newIds } = duplicateElements([k], ['k'], { x: 16, y: 16 });
+    const c = elements[1] as typeof k;
+    expect(newIds).toEqual([c.id]);
+    expect(c.id).not.toBe('k');
+    expect([c.x, c.y]).toEqual([116, 116]);
+    expect(c.points).toEqual(k.points);
+    expect(c.pressure).toBe(true);
+  });
+  it('resize scales the points about the anchor and the pen size by sqrt(|sx*sy|)', () => {
+    const k = mkInk();
+    // Selection box is the bounds (98..182 x 98..122): the se handle drags from (182, 122).
+    const b = getBounds(k);
+    const out = resizeElements([k], ['k'], 'se', { x: b.x + 2 * b.width, y: b.y + 2 * b.height }, NO);
+    const r = out[0] as typeof k;
+    expect(r.style.strokeWidth).toBeCloseTo(8);
+    expect([r.x, r.y, r.width, r.height]).toEqual([102, 102, 160, 40]); // x: 98 + (100 - 98) * 2, extent 80 -> 160 and 20 -> 40
+    expect(k.style.strokeWidth).toBe(4);
+  });
+  it('a flipped resize keeps width/height non-negative', () => {
+    const k = mkInk();
+    const b = getBounds(k);
+    const out = resizeElements([k], ['k'], 'e', { x: b.x - 40, y: b.y + b.height / 2 }, NO);
+    const r = out[0] as typeof k;
+    expect(r.width).toBeGreaterThan(0);
+    expect(r.x).toBeLessThan(100);
+  });
+  it('style changes apply and keep the points; text helpers ignore ink', () => {
+    const k = mkInk();
+    const out = applyStyleToElements([k], ['k'], { strokeColor: '#ff6b6b', strokeWidth: 8 });
+    const s = out[0] as typeof k;
+    expect(s.style.strokeColor).toBe('#ff6b6b');
+    expect(s.style.strokeWidth).toBe(8);
+    expect(s.points).toBe(k.points);
+    expect(getElementText(k)).toBe('');
+    const els = [k];
+    expect(setElementText(els, 'k', 'hello')).toBe(els);
   });
 });

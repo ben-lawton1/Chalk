@@ -33,6 +33,6 @@ def scene_with():
     """Factory for a minimal valid scene whose elements are opaque dicts."""
 
     def make(*element_ids: str) -> dict:
-        return {"type": "chalk/scene", "version": 2, "elements": [{"id": i, "type": "shape"} for i in element_ids]}
+        return {"type": "chalk/scene", "version": 3, "elements": [{"id": i, "type": "shape"} for i in element_ids]}
 
     return make

@@ -9,7 +9,8 @@ import { TOOLS } from './index';
 
 interface Mods { shift?: boolean; alt?: boolean; mod?: boolean }
 function pi(x: number, y: number, m: Mods = {}): PointerInfo {
-  return { world: { x, y }, screen: { x, y }, shift: !!m.shift, alt: !!m.alt, mod: !!m.mod, button: 0, buttons: 1 };
+  return { world: { x, y }, screen: { x, y }, shift: !!m.shift, alt: !!m.alt, mod: !!m.mod, button: 0, buttons: 1,
+    pointerType: 'mouse', pressure: 0.5, samples: [{ world: { x, y }, pressure: 0.5 }] };
 }
 /** down at pts[0], moves through the middle points, up at the last point. */
 function drag(tool: Tool, pts: [number, number][], downMods: Mods = {}, upMods: Mods = downMods): void {
