@@ -228,6 +228,10 @@ describe('edit and tool keys', () => {
     expect(actions.setTool).toHaveBeenLastCalledWith('arrow');
     handleKeyDown(key('t', { code: 'KeyT' }));
     expect(actions.setTool).toHaveBeenLastCalledWith('text');
+    handleKeyDown(key('p', { code: 'KeyP' }));
+    expect(actions.setTool).toHaveBeenLastCalledWith('pen');
+    handleKeyDown(key('e', { code: 'KeyE' }));
+    expect(actions.setTool).toHaveBeenLastCalledWith('eraser');
   });
   it('digit keys pick tools via code', () => {
     const expected = ['select', 'rectangle', 'diamond', 'ellipse', 'triangle', 'arrow', 'line', 'text'];
@@ -252,7 +256,7 @@ describe('edit and tool keys', () => {
 
 describe('SHORTCUTS', () => {
   it('covers every group and has no empty fields', () => {
-    expect(new Set(SHORTCUTS.map((s) => s.group))).toEqual(new Set(['Tools', 'Edit', 'View', 'File']));
+    expect(new Set(SHORTCUTS.map((s) => s.group))).toEqual(new Set(['Tools', 'Edit', 'View', 'File', 'Pen & touch']));
     for (const s of SHORTCUTS) {
       expect(s.keys).not.toBe('');
       expect(s.description).not.toBe('');

@@ -3,13 +3,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ArrowElement, ChalkElement, ShapeElement, TextElement } from '../types';
 import { DEFAULT_STYLE, DUPLICATE_OFFSET } from '../constants';
 import { getBounds } from '../core/geometry';
+import { createInk } from '../core/ink';
 import { toSceneFile } from '../core/serialize';
 import { getState, resetState, setElements, setInteraction, setLastPointerWorld, setSelection, setState, setViewport } from './store';
 import { clearHistory, getHistorySizes } from './history';
 import {
   applyStyle, closeDialog, commitEditing, copySelection, createTextAt, cutSelection, deleteSelection, duplicateSelection,
   editSelection, finishCreation, nudgeSelection, openDialog, pasteClipboard, pasteText, placeShape, redo, reorderSelection,
-  selectAll, setTool, startEditing, toggleToolLock, undo, updateEditingText, zoomIn, zoomOut, zoomToFit, zoomToSelection, resetZoom, goHome,
+  selectAll, setActivePen, setPenButtonsSwapped, setPenTrayOpen, setTool, startEditing, updatePen, toggleToolLock, undo, updateEditingText, zoomIn, zoomOut, zoomToFit, zoomToSelection, resetZoom, goHome,
 } from './actions';
 
 function rect(id: string, x: number, y: number, w = 100, h = 60): ShapeElement {
@@ -377,5 +378,73 @@ describe('view', () => {
     setState({ viewportSize: { width: 800, height: 600 }, viewport: { scrollX: 5, scrollY: 5, zoom: 3 } });
     zoomToSelection();
     expect(getState().viewport).toEqual({ scrollX: 0, scrollY: 0, zoom: 1 });
+  });
+});
+
+describe('pens and the pen tray (v3)', () => {
+  it('setActivePen only accepts 0..2', () => {
+    setActivePen(2);
+    expect(getState().activePen).toBe(2);
+    setActivePen(3);
+    setActivePen(-1);
+    setActivePen(0.5);
+    expect(getState().activePen).toBe(2);
+  });
+  it('updatePen replaces one pen immutably and ignores bad input', () => {
+    const before = getState().pens;
+    updatePen(1, { color: '#4dabf7', size: 8 });
+    const after = getState().pens;
+    expect(after).not.toBe(before);
+    expect(after[1]).toEqual({ color: '#4dabf7', size: 8 });
+    expect(after[0]).toBe(before[0]);
+    expect(before[1]).toEqual({ color: '#ff6b6b', size: 3 }); // untouched
+    updatePen(1, { size: 0 });
+    updatePen(1, { size: -2 });
+    updatePen(9, { color: '#000000' });
+    expect(getState().pens[1]).toEqual({ color: '#4dabf7', size: 8 });
+    expect(getState().pens).toHaveLength(3);
+  });
+  it('updatePen with nothing new keeps the same array', () => {
+    const before = getState().pens;
+    updatePen(0, { color: before[0]!.color, size: before[0]!.size });
+    expect(getState().pens).toBe(before);
+  });
+  it('setPenButtonsSwapped and setPenTrayOpen set their flags', () => {
+    setPenButtonsSwapped(true);
+    setPenTrayOpen(true);
+    expect(getState().penButtonsSwapped).toBe(true);
+    expect(getState().penTrayOpen).toBe(true);
+  });
+  it('the tray stays open across pen, eraser and lasso and closes for any other tool', () => {
+    setPenTrayOpen(true);
+    for (const t of ['pen', 'eraser', 'lasso'] as const) {
+      setTool(t);
+      expect(getState().penTrayOpen).toBe(true);
+    }
+    setTool('rectangle');
+    expect(getState().penTrayOpen).toBe(false);
+    setTool('pen');
+    setPenTrayOpen(true);
+    setTool('select');
+    expect(getState().penTrayOpen).toBe(false);
+  });
+  it('the pen, eraser and lasso keep a selection; shape tools clear it', () => {
+    setElements([rect('a', 0, 0)]);
+    setSelection(['a']);
+    setTool('pen');
+    expect(getState().selectedIds).toEqual(['a']);
+    setTool('lasso');
+    expect(getState().selectedIds).toEqual(['a']);
+    setTool('rectangle');
+    expect(getState().selectedIds).toEqual([]);
+  });
+  it('ink cannot be edited: startEditing and editSelection do nothing', () => {
+    const k = createInk([{ x: 5, y: 5, p: 0.5 }, { x: 50, y: 20, p: 0.5 }], false, DEFAULT_STYLE);
+    setElements([k]);
+    setSelection([k.id]);
+    startEditing(k.id);
+    expect(getState().editing).toBeNull();
+    expect(editSelection()).toBe(false);
+    expect(getState().editing).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { PALETTE_DRAG_THRESHOLD_PX } from '../constants';
 import { SHAPES, isShapeKind } from '../core/shapes';
 import { screenToWorld } from '../core/viewport';
-import { placeShape, setTool, toggleToolLock } from '../state/actions';
+import { placeShape, setPenTrayOpen, setTool, toggleToolLock } from '../state/actions';
 import { getState, setInteraction } from '../state/store';
 import { TOOLBAR, TOOL_INFO } from '../tools/index';
 import { TID, tidTool } from '../testids';
@@ -45,6 +45,7 @@ function canvasScreenPoint(clientX: number, clientY: number): Point | null {
 export function Toolbar() {
   const tool = useAppState((s) => s.tool);
   const toolLocked = useAppState((s) => s.toolLocked);
+  const penColor = useAppState((s) => s.pens[s.activePen]?.color ?? '#e9ecef');
   const [ghost, setGhost] = useState<{ x: number; y: number; kind: ShapeKind } | null>(null);
   const record = useRef<DragRecord | null>(null);
   const suppressClick = useRef(false);
@@ -140,6 +141,17 @@ export function Toolbar() {
       suppressClick.current = false;
       return;
     }
+    if (id === 'pen') {
+      // The Pen button opens the pen tray: first click picks the pen and shows the tray, later clicks show or hide it.
+      const s = getState();
+      if (s.tool === 'pen' || s.tool === 'eraser' || s.tool === 'lasso') {
+        setPenTrayOpen(!s.penTrayOpen);
+      } else {
+        setTool('pen');
+        setPenTrayOpen(true);
+      }
+      return;
+    }
     setTool(id);
   }
 
@@ -151,8 +163,9 @@ export function Toolbar() {
           const draggable = isShapeKind(id);
           const hint = digitHint(info.shortcuts);
           const prev = i > 0 ? TOOLBAR[i - 1] : null;
-          // visual groups: [hand, select] | shapes | [arrow, line, text]
-          const sep = prev !== null && (id === 'rectangle' || id === 'arrow');
+          // visual groups: [hand, select] | shapes | [arrow, line, text] | [pen]
+          const sep = prev !== null && (id === 'rectangle' || id === 'arrow' || id === 'pen');
+          const pressed = id === 'pen' ? tool === 'pen' || tool === 'eraser' || tool === 'lasso' : tool === id;
           return (
             <Fragment key={id}>
               {sep && <span className="toolbar-sep" aria-hidden="true" />}
@@ -160,7 +173,7 @@ export function Toolbar() {
                 type="button"
                 className="tool-btn"
                 data-testid={tidTool(id)}
-                aria-pressed={tool === id}
+                aria-pressed={pressed}
                 aria-label={info.title}
                 title={`${info.title} — ${keyLabel(info.shortcuts)}`}
                 onMouseDown={(e) => e.preventDefault()}
@@ -176,6 +189,7 @@ export function Toolbar() {
                   : {})}
               >
                 <ToolIcon tool={id} size={24} />
+                {id === 'pen' && <span className="pen-dot" style={{ background: penColor }} />}
                 {hint && <span className="tool-hint">{hint}</span>}
               </button>
             </Fragment>

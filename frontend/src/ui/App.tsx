@@ -5,6 +5,7 @@ import { Canvas } from './Canvas';
 import { HelpDialog } from './HelpDialog';
 import { Hints } from './Hints';
 import { Icon } from './icons';
+import { PenTray } from './PenTray';
 import { Sidebar } from './Sidebar';
 import { StylePanel } from './StylePanel';
 import { TextEditor } from './TextEditor';
@@ -26,6 +27,7 @@ export function App() {
       </div>
       <TopBar />
       <Toolbar />
+      <PenTray />
       <StylePanel />
       <ZoomControls />
       <Hints />

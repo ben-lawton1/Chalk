@@ -6,7 +6,7 @@ import type { ShortcutInfo } from '../types';
 import { Icon } from './icons';
 
 type Group = ShortcutInfo['group'];
-const LEFT: readonly Group[] = ['Tools', 'View', 'File'];
+const LEFT: readonly Group[] = ['Tools', 'Pen & touch', 'View', 'File'];
 const RIGHT: readonly Group[] = ['Edit'];
 
 function Column(props: { groups: readonly Group[] }) {

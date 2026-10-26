@@ -11,6 +11,7 @@ import { attachClipboard } from './input/clipboard';
 import { startAutosave } from './persistence/autosave';
 import { initBoards } from './persistence/boards';
 import { initSidebarPrefs, startLibrarySync } from './persistence/library';
+import { startPenPrefs } from './persistence/penPrefs';
 import { App } from './ui/App';
 
 function attempt(name: string, fn: () => unknown): void {
@@ -35,6 +36,7 @@ async function boot(): Promise<void> {
   });
   // 2. test hook, 3. React (rendered directly, without a dev double-mount wrapper), 4. input + persistence
   attempt('initSidebarPrefs', initSidebarPrefs);
+  attempt('startPenPrefs', startPenPrefs);
   attempt('installTestHook', installTestHook);
   createRoot(document.getElementById('root')!).render(<App />);
   attempt('attachKeyboard', attachKeyboard);

@@ -1,5 +1,5 @@
 // Command entry points for UI, keyboard, clipboard and tools: one undo entry per command (WP3).
-import type { ChalkElement, Point, ReorderDir, ShapeKind, Size, Snapshot, Style, ToolId, Viewport } from '../types';
+import type { ChalkElement, PenSettings, Point, ReorderDir, ShapeKind, Size, Snapshot, Style, ToolId, Viewport } from '../types';
 import { DUPLICATE_OFFSET, FIT_MAX_ZOOM, FIT_PADDING_PX, ZOOM_STEP_FACTOR } from '../constants';
 import { SHAPES } from '../core/shapes';
 import { lineHeightPx, withMeasuredText } from '../core/text';
@@ -25,11 +25,38 @@ let clipboardBuffer: string | null = null;
 
 export function setTool(tool: ToolId): void {
   commitEditing();
-  setState({ tool });
+  // The pen tray belongs to the pen, eraser and lasso; any other tool closes it.
+  setState(tool === 'pen' || tool === 'eraser' || tool === 'lasso' ? { tool } : { tool, penTrayOpen: false });
   // Written inline: state/* may not import tools/* (§4.2). Drawing tools = everything but select, hand and the ink tools
   // (a lasso selection must survive a switch to the pen, whose tip then moves it).
   if (tool !== 'select' && tool !== 'hand' && tool !== 'pen' && tool !== 'eraser' && tool !== 'lasso') setSelection([]);
   setInteraction({ hoverId: null, bindTarget: null, cursor: null, dropPreview: null });
+}
+
+// ---------------------------------------------------------------------------
+// Pens (v3): 3 configurable pens, the active one, the button swap and the tray
+// ---------------------------------------------------------------------------
+
+export function setActivePen(i: number): void {
+  if (Number.isInteger(i) && i >= 0 && i < getState().pens.length) setState({ activePen: i });
+}
+
+/** Changes the colour and/or size of pen `i`. Affects only new strokes. */
+export function updatePen(i: number, patch: Partial<PenSettings>): void {
+  const pens = getState().pens;
+  const cur = pens[i];
+  if (!cur) return;
+  const next: PenSettings = { color: patch.color ?? cur.color, size: patch.size !== undefined && patch.size > 0 ? patch.size : cur.size };
+  if (next.color === cur.color && next.size === cur.size) return;
+  setState({ pens: pens.map((p, j) => (j === i ? next : p)) });
+}
+
+export function setPenButtonsSwapped(swapped: boolean): void {
+  setState({ penButtonsSwapped: swapped });
+}
+
+export function setPenTrayOpen(open: boolean): void {
+  setState({ penTrayOpen: open });
 }
 
 export function toggleToolLock(): void {

@@ -75,6 +75,13 @@ export const TID = {
   toast: 'toast',
   welcomeHint: 'welcome-hint',
   hintBar: 'hint-bar',
+
+  // Pen tray (pen chips use tidPenSlot, colours and sizes tidPenColor / tidPenSize)
+  penTray: 'pen-tray',
+  penEraser: 'pen-eraser',
+  penLasso: 'pen-lasso',
+  penOptions: 'pen-options',
+  penSwapButtons: 'pen-swap-buttons',
 } as const;
 
 /** Toolbar button for a ToolId, e.g. 'tool-rectangle'. Active state: aria-pressed="true". */
@@ -116,3 +123,9 @@ export const tidRowDelete = (key: string): string => `row-delete-${key}`;
 export const tidRowAdd = (key: string): string => `row-add-${key}`;
 /** Pen size button in the style panel (ink selected), by index into PEN_SIZES. */
 export const tidInkSize = (index: number): string => `style-inksize-${index}`;
+/** Pen tray (v3): the tray, its 3 pen chips, the eraser and lasso chips, and the options popover. */
+export const tidPenSlot = (index: number): string => `pen-slot-${index}`;
+/** Colour swatch in the pen options, by index into PEN_COLORS. */
+export const tidPenColor = (index: number): string => `pen-color-${index}`;
+/** Size button in the pen options, by index into PEN_SIZES. */
+export const tidPenSize = (index: number): string => `pen-size-${index}`;
