@@ -12,6 +12,15 @@ import { cancelGesture, isTextEntry } from './pointer';
 
 export type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat'> & { target: EventTarget | null };
 
+/** Window event the terminal dock listens for (input/ may not import ui/, so Ctrl+` is a message). */
+export const TERMINAL_TOGGLE_EVENT = 'chalk:terminal-toggle';
+
+/** True when the event target is inside the terminal dock: everything there belongs to the shell. */
+export function inTerminalPanel(t: EventTarget | null): boolean {
+  const el = t as { closest?: (sel: string) => unknown } | null;
+  return typeof el?.closest === 'function' && Boolean(el.closest('.terminal-panel'));
+}
+
 const ARROW_DELTAS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
   ArrowRight: [1, 0],
@@ -37,8 +46,15 @@ export function handleKeyDown(e: KeyLike): boolean {
   const lower = (e.key ?? '').toLowerCase();
   const s0 = getState();
 
-  // 0. Save and zoom combos run before every guard (also while typing).
-  if (mod && !e.altKey) {
+  // Ctrl+` toggles the terminal from anywhere, including from inside it.
+  if (mod && !e.altKey && code === 'Backquote') {
+    if (!e.repeat && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(TERMINAL_TOGGLE_EVENT));
+    return true;
+  }
+  const inTerm = inTerminalPanel(e.target);
+
+  // 0. Save and zoom combos run before every guard (also while typing), except inside the terminal where the shell owns them.
+  if (mod && !e.altKey && !inTerm) {
     const isSave = lower === 's';
     const isIn = code === 'Equal' || code === 'NumpadAdd';
     const isOut = code === 'Minus' || code === 'NumpadSubtract';
@@ -54,7 +70,7 @@ export function handleKeyDown(e: KeyLike): boolean {
   }
 
   // 1-2. Typing targets and the text editor keep their keys.
-  if (isTextEntry(e.target)) return false;
+  if (isTextEntry(e.target) || inTerm) return false;
   if (s0.editing) return false;
 
   // 3. Dialogs: only Escape.
@@ -238,6 +254,7 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'Ctrl + 0', description: 'Zoom to 100%', group: 'View' },
   { keys: 'Home', description: 'Back to the top-left of the page', group: 'View' },
   { keys: 'Ctrl + \\', description: 'Show or hide the sidebar', group: 'View' },
+  { keys: 'Ctrl + `', description: 'Show or hide the terminal (inside it, every key goes to the shell)', group: 'View' },
   { keys: 'Shift + 1', description: 'Zoom to fit everything', group: 'View' },
   { keys: 'Shift + 2', description: 'Zoom to selection', group: 'View' },
   { keys: 'Finger drag', description: 'Pan (the selection moves instead when you drag on it)', group: 'Pen & touch' },

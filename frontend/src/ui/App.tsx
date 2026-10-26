@@ -13,6 +13,7 @@ import { Toast } from './Toast';
 import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { ZoomControls } from './ZoomControls';
+import { TerminalButton, TerminalPanel } from './terminal/TerminalPanel';
 import { useAppState } from './hooks';
 
 export function App() {
@@ -29,6 +30,8 @@ export function App() {
       <Toolbar />
       <PenTray />
       <StylePanel />
+      <TerminalButton />
+      <TerminalPanel />
       <ZoomControls />
       <Hints />
       <button
