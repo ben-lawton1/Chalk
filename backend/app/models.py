@@ -60,6 +60,10 @@ class Health(BaseModel):
     status: Literal["ok"]
 
 
+class AppConfig(BaseModel):
+    terminalUrl: str
+
+
 class BoardSummary(BaseModel):
     id: str
     name: str

@@ -1,5 +1,6 @@
 """HTTP routes under /api: health, board CRUD and the notebook/section library (v2-A)."""
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -11,6 +12,7 @@ from app.models import (
     BOARD_ID_RE,
     DEFAULT_BOARD_NAME,
     MAX_SCENE_BYTES,
+    AppConfig,
     Board,
     BoardCreate,
     BoardSummary,
@@ -22,6 +24,8 @@ from app.models import (
     LibraryTree,
     empty_scene,
 )
+
+DEFAULT_TERMINAL_URL = "http://127.0.0.1:7681"
 
 router = APIRouter(prefix="/api")
 
@@ -60,6 +64,11 @@ def _check_size(scene: dict[str, Any] | None) -> None:
 @router.get("/health", response_model=Health)
 def health() -> Health:
     return Health(status="ok")
+
+
+@router.get("/config", response_model=AppConfig)
+def get_config() -> AppConfig:
+    return AppConfig(terminalUrl=os.environ.get("CHALK_TERMINAL_URL") or DEFAULT_TERMINAL_URL)
 
 
 @router.get("/library", response_model=LibraryTree)
