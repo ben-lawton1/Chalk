@@ -1,10 +1,18 @@
 // window.__CHALK__ test hook installed in every build (WP0).
-import type { ChalkElement, ChalkTestHook } from '../types';
+import type { ChalkElement, ChalkTestHook, Point } from '../types';
 import { getState } from '../state/store';
 import { screenToWorld, worldToScreen } from '../core/viewport';
 import { getBounds } from '../core/geometry';
 import { flushSave } from '../persistence/autosave';
 import { whenRendered } from '../render/canvas';
+
+/** Top-left of the interactive canvas in client px (the open sidebar offsets it); 0,0 if it is not mounted. */
+function canvasOrigin(): Point {
+  const c = typeof document === 'undefined' ? null : document.querySelector('[data-testid="canvas-interactive"]');
+  if (!c) return { x: 0, y: 0 };
+  const r = c.getBoundingClientRect();
+  return { x: r.left, y: r.top };
+}
 
 export function installTestHook(): void {
   if (typeof window === 'undefined') return;
@@ -26,15 +34,23 @@ export function installTestHook(): void {
         },
       };
     },
-    worldToScreen: (p) => worldToScreen(p, getState().viewport),
-    screenToWorld: (p) => screenToWorld(p, getState().viewport),
+    worldToScreen: (p) => {
+      const o = canvasOrigin();
+      const q = worldToScreen(p, getState().viewport);
+      return { x: q.x + o.x, y: q.y + o.y };
+    },
+    screenToWorld: (p) => {
+      const o = canvasOrigin();
+      return screenToWorld({ x: p.x - o.x, y: p.y - o.y }, getState().viewport);
+    },
     getElementScreenBounds: (id) => {
       const s = getState();
       const el = s.elements.find((e) => e.id === id);
       if (!el) return null;
       const b = getBounds(el);
+      const o = canvasOrigin();
       const tl = worldToScreen({ x: b.x, y: b.y }, s.viewport);
-      return { x: tl.x, y: tl.y, width: b.width * s.viewport.zoom, height: b.height * s.viewport.zoom };
+      return { x: tl.x + o.x, y: tl.y + o.y, width: b.width * s.viewport.zoom, height: b.height * s.viewport.zoom };
     },
     flushSave: () => flushSave(),
     whenRendered: () => whenRendered(),

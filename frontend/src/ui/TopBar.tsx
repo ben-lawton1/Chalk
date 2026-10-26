@@ -1,10 +1,10 @@
-// Top bar: main menu, editable board name, save status pill and the conflict banner. Owner: WP4.
+// Top bar: sidebar toggle, main menu, breadcrumb, editable page name, save status pill and the conflict banner. Owner: WP4.
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { DEFAULT_BOARD_NAME, MAX_BOARD_NAME_LENGTH } from '../constants';
 import { createBoard, renameBoard, resolveConflict } from '../persistence/boards';
 import { exportPng, exportSceneJson, importSceneJson } from '../render/export';
-import { openDialog, replaceScene } from '../state/actions';
+import { openDialog, replaceScene, setSidebarOpen } from '../state/actions';
 import { getState, notify } from '../state/store';
 import { TID } from '../testids';
 import type { SaveStatus } from '../types';
@@ -24,10 +24,20 @@ function currentBoardName(): string {
   return getState().board?.name ?? DEFAULT_BOARD_NAME;
 }
 
+const COMPACT_STAGE_PX = 1180;
+const CRUMB_STAGE_PX = 1500;
+
 export function TopBar() {
   const boardName = useAppState((s) => s.board?.name ?? '');
   const hasBoard = useAppState((s) => s.board !== null);
   const saveStatus = useAppState((s) => s.saveStatus);
+  const sidebarOpen = useAppState((s) => s.sidebarOpen);
+  const notebook = useAppState((s) => s.board?.notebook ?? '');
+  const section = useAppState((s) => s.board?.section ?? '');
+  const stageWidth = useAppState((s) => s.viewportSize.width);
+  // Narrow stage (sidebar open on a small window): the bar would run into the toolbar, so it loses the breadcrumb and status text.
+  const compact = stageWidth > 0 && stageWidth < COMPACT_STAGE_PX;
+  const showCrumb = stageWidth >= CRUMB_STAGE_PX && notebook !== '' && section !== '';
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState(boardName);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -105,7 +115,20 @@ export function TopBar() {
 
   return (
     <>
-      <div className="island topbar">
+      <div className="island topbar" data-compact={compact ? 'true' : undefined}>
+        {!sidebarOpen && (
+          <button
+            type="button"
+            className="icon-btn"
+            data-testid={TID.sidebarToggle}
+            aria-label="Show sidebar"
+            title="Show sidebar — Ctrl + \"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Icon name="sidebar" size={20} />
+          </button>
+        )}
         <div className="menu-wrap" ref={wrapRef}>
           <button
             type="button"
@@ -125,12 +148,7 @@ export function TopBar() {
               <button type="button" role="menuitem" className="menu-item" data-testid={TID.menuNewBoard}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => run(() => { void createBoard(); })}>
-                New board
-              </button>
-              <button type="button" role="menuitem" className="menu-item" data-testid={TID.menuOpenBoards}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => run(() => openDialog('boards'))}>
-                Open board…
+                New page
               </button>
               <div className="menu-sep" role="separator" />
               <button type="button" role="menuitem" className="menu-item" data-testid={TID.menuImport}
@@ -161,12 +179,17 @@ export function TopBar() {
             </div>
           )}
         </div>
+        {showCrumb && (
+          <span className="breadcrumb" data-testid={TID.breadcrumb} title={`${notebook} › ${section}`}>
+            {notebook} <span aria-hidden="true">›</span> {section}
+          </span>
+        )}
         <input
           type="text"
           className="board-name"
           data-testid={TID.boardName}
-          aria-label="Board name"
-          title="Rename board"
+          aria-label="Page name"
+          title="Rename page"
           maxLength={MAX_BOARD_NAME_LENGTH}
           disabled={!hasBoard}
           spellCheck={false}

@@ -1,11 +1,11 @@
-// Root component: canvas plus all floating chrome, the help button and modal dialogs. Owner: WP4.
+// Root component: sidebar, the canvas stage and all floating chrome, the help button and modal dialogs. Owner: WP4.
 import { openDialog } from '../state/actions';
 import { TID } from '../testids';
-import { BoardList } from './BoardList';
 import { Canvas } from './Canvas';
 import { HelpDialog } from './HelpDialog';
 import { Hints } from './Hints';
 import { Icon } from './icons';
+import { Sidebar } from './Sidebar';
 import { StylePanel } from './StylePanel';
 import { TextEditor } from './TextEditor';
 import { Toast } from './Toast';
@@ -18,8 +18,12 @@ export function App() {
   const dialog = useAppState((s) => s.dialog);
   return (
     <>
-      <Canvas />
-      <TextEditor />
+      <Sidebar />
+      {/* The stage is everything right of the sidebar: canvas and text editor share its coordinate space. */}
+      <div className="stage">
+        <Canvas />
+        <TextEditor />
+      </div>
       <TopBar />
       <Toolbar />
       <StylePanel />
@@ -37,7 +41,6 @@ export function App() {
         <Icon name="help" size={20} />
       </button>
       <Toast />
-      {dialog === 'boards' && <BoardList />}
       {dialog === 'help' && <HelpDialog />}
     </>
   );

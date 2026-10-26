@@ -3,7 +3,8 @@ import type { ToolId } from '../types';
 import { SHAPES, isShapeKind } from '../core/shapes';
 
 export type IconName = 'hand' | 'select' | 'arrow' | 'line' | 'text' | 'lock' | 'unlock' | 'undo' | 'redo' | 'menu'
-  | 'help' | 'zoomIn' | 'zoomOut' | 'fit' | 'trash' | 'duplicate' | 'front' | 'back' | 'forward' | 'backward' | 'close' | 'home';
+  | 'help' | 'zoomIn' | 'zoomOut' | 'fit' | 'trash' | 'duplicate' | 'front' | 'back' | 'forward' | 'backward' | 'close' | 'home'
+  | 'sidebar' | 'chevron' | 'notebook' | 'plus' | 'more' | 'pencil';
 
 /** SVG path data per icon, drawn with a 1.75px round stroke in a 24x24 box. */
 const PATHS: Record<IconName, string> = {
@@ -29,6 +30,12 @@ const PATHS: Record<IconName, string> = {
   backward: 'M12 5v12 M7 13l5 5 5-5',
   close: 'M6 6l12 12 M18 6L6 18',
   home: 'M4 11l8-7 8 7 M6 10v10h4v-6h4v6h4V10',
+  sidebar: 'M4 5h16v14H4z M9.5 5v14',
+  chevron: 'M9 6l6 6-6 6',
+  notebook: 'M7 4h10.5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7z M7 4v16 M4.5 8H7 M4.5 12H7 M4.5 16H7',
+  plus: 'M12 5v14 M5 12h14',
+  more: 'M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0 M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+  pencil: 'M4 20l1-4L16 5l3 3L8 19z M14 7l3 3',
 };
 
 function Svg(props: { d: string; size: number }) {

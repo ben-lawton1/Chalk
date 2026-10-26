@@ -115,7 +115,7 @@ export function Canvas() {
       ref={containerRef}
       className="canvas-container"
       data-testid={TID.canvasContainer}
-      style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: 'var(--z-canvas)' }}
+      style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
     >
       <canvas ref={staticRef} data-testid={TID.canvasStatic} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
       <canvas ref={interactiveRef} data-testid={TID.canvasInteractive} style={{ position: 'absolute', inset: 0, touchAction: 'none' }} />
