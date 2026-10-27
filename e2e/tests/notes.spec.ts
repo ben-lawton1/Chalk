@@ -29,6 +29,10 @@ test('NOTES-1: Ctrl+K and /url link text; the link is stored with its href', asy
   await page.keyboard.press('Enter');
   await expect(page.getByTestId(TID.notesLinkInput)).toBeHidden();
   await expect(editorEl(page).locator('a[href="https://example.com/a"]')).toHaveText('docs');
+  // The caret is collapsed after the link and outside it: typing straight away (no End key) must not replace or extend the link.
+  await page.keyboard.type(' more');
+  await expect(editorEl(page).locator('a[href="https://example.com/a"]')).toHaveText('docs');
+  await expect(editorEl(page).locator('p').first()).toHaveText('docs more');
 
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');

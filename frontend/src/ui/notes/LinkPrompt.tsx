@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/core';
+import { TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { normalizeLinkUrl } from '../../core/notesView';
 import { TID } from '../../testids';
 
@@ -14,15 +15,23 @@ export function openLinkPrompt(editor: Editor): LinkPromptState {
   return { left: c.left, top: c.bottom + 6, initial: String(editor.getAttributes('link').href ?? '') };
 }
 
+/** Collapse to the end of the (linked) range and drop the stored link mark, so the next keystroke lands after the link, outside it. */
+const caretAfterLink = ({ tr, state }: { tr: Transaction; state: EditorState }): boolean => {
+  tr.setSelection(TextSelection.create(tr.doc, tr.selection.to));
+  const linkType = state.schema.marks.link;
+  if (linkType) tr.removeStoredMark(linkType);
+  return true;
+};
+
 export function applyLink(editor: Editor, raw: string): void {
   const href = normalizeLinkUrl(raw);
   const chain = editor.chain().focus();
   if (href === '') {
     chain.extendMarkRange('link').unsetLink().run();
   } else if (editor.state.selection.empty && !editor.isActive('link')) {
-    chain.insertContent({ type: 'text', text: href, marks: [{ type: 'link', attrs: { href } }] }).run();
+    chain.insertContent({ type: 'text', text: href, marks: [{ type: 'link', attrs: { href } }] }).command(caretAfterLink).run();
   } else {
-    chain.extendMarkRange('link').setLink({ href }).run();
+    chain.extendMarkRange('link').setLink({ href }).command(caretAfterLink).run();
   }
 }
 
