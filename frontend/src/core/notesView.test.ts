@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampCaret, inNotesColumn, isBelowNotes, normalizeLinkUrl, panToCaret, placePopup } from './notesView';
+import { clampCaret, inNotesColumn, isBelowNotes, isSafeOpenUrl, normalizeLinkUrl, panToCaret, placePopup } from './notesView';
 
 const bounds = { x: 48, y: 48, width: 760, height: 200 };
 
@@ -109,5 +109,20 @@ describe('placePopup', () => {
   it('prefers above for a toolbar and falls back below at the top', () => {
     expect(placePopup({ left: 100, top: 300, bottom: 400 }, { width: 200, height: 36 }, bounds, { prefer: 'above' }).placement).toBe('above');
     expect(placePopup({ left: 100, top: 20, bottom: 120 }, { width: 200, height: 36 }, bounds, { prefer: 'above' }).placement).toBe('below');
+  });
+});
+
+describe('isSafeOpenUrl', () => {
+  it('allows http, https and mailto only', () => {
+    expect(isSafeOpenUrl('https://example.com/a?b=1')).toBe(true);
+    expect(isSafeOpenUrl('HTTP://example.com')).toBe(true);
+    expect(isSafeOpenUrl(' mailto:a@b.c ')).toBe(true);
+    expect(isSafeOpenUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeOpenUrl('data:text/html,hi')).toBe(false);
+    expect(isSafeOpenUrl('file:///etc/passwd')).toBe(false);
+    expect(isSafeOpenUrl('/local')).toBe(false);
+    expect(isSafeOpenUrl('#top')).toBe(false);
+    expect(isSafeOpenUrl('')).toBe(false);
+    expect(isSafeOpenUrl(null)).toBe(false);
   });
 });

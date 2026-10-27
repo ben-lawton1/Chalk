@@ -226,14 +226,15 @@ docker compose -f compose.test.yaml up --build --force-recreate --abort-on-conta
 docker compose -f compose.test.yaml down
 ```
 
-The whole e2e run takes about ten minutes, so when a single tool call has a time limit run it in two halves by file name, against the same running stack:
+The whole e2e run takes about 5 minutes. To run it against a stack you keep up (for example when a single tool call has a time limit), start the services detached, then run the e2e container:
 
 ```sh
 docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test term-test
-docker compose -f compose.test.yaml run --rm --build e2e npx playwright test 'tests/[a-n]*'
-docker compose -f compose.test.yaml run --rm e2e npx playwright test 'tests/[o-z]*'
+docker compose -f compose.test.yaml run --rm --build e2e
 docker compose -f compose.test.yaml down
 ```
+
+Do not split the run with `tests/[a-n]*` style filters: Playwright treats file arguments as regular expressions, so each half would match and run the whole suite. A single spec is `... run --rm e2e npx playwright test tests/notes.spec.ts`.
 
 The pen and touch specs (`e2e/tests/pen-touch.spec.ts`) dispatch synthetic `PointerEvent`s with `pointerType` `pen` or `touch` through the helpers `ptrEvents`, `penStroke`, `penEraserDrag`, `penBarrelDrag`, `fingerDrag`, `fingerTap` and `pinch` (Playwright's mouse cannot produce them).
 

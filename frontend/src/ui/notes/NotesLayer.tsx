@@ -1,13 +1,13 @@
 // The page notes column: a Tiptap editor in a DOM layer above the canvases, placed with the viewport like TextEditor (translate + scale).
 // Inactive: pointer-events none, so clicks, ink and touch go to the canvas. Active (notes mode): the column takes input.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor, JSONContent } from '@tiptap/react';
 import { Selection } from '@tiptap/pm/state';
 import { NOTES_CARET_KEY, NOTES_WIDTH, NOTES_X, NOTES_Y } from '../../constants';
 import { isNotesEmpty } from '../../core/notes';
-import { clampCaret, isBelowNotes, panToCaret } from '../../core/notesView';
+import { clampCaret, isBelowNotes, isSafeOpenUrl, panToCaret } from '../../core/notesView';
 import { screenToWorld, worldToScreen } from '../../core/viewport';
 import { handleWheel } from '../../input/pointer';
 import { setNotes, setNotesBounds } from '../../state/actions';
@@ -179,6 +179,25 @@ function NotesEditor(props: { boardId: string }) {
     if (!active) setLinkPrompt(null);
   }, [active]);
 
+  /** Web links: a plain click opens one while notes mode is off; in notes mode only Ctrl/Cmd+click does (a plain click edits). */
+  function onColumnClick(e: ReactMouseEvent<HTMLDivElement>): void {
+    if (e.button !== 0 || !(e.target instanceof Element)) return;
+    const a = e.target.closest('a[href]');
+    if (!a || !e.currentTarget.contains(a)) return;
+    if (getState().notesActive && !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    const href = a.getAttribute('href');
+    if (isSafeOpenUrl(href)) window.open(href as string, '_blank', 'noopener,noreferrer');
+  }
+  /** The tooltip carries the URL plus a hint; set on hover so it follows the mode. */
+  function onColumnMouseOver(e: ReactMouseEvent<HTMLDivElement>): void {
+    if (!(e.target instanceof Element)) return;
+    const a = e.target.closest('a[href]');
+    const href = a?.getAttribute('href');
+    if (!a || !href) return;
+    a.setAttribute('title', getState().notesActive ? `${href}\nCtrl+click to open` : href);
+  }
+
   const origin = worldToScreen({ x: NOTES_X, y: NOTES_Y }, viewport);
   const style: CSSProperties = {
     left: origin.x,
@@ -197,6 +216,8 @@ function NotesEditor(props: { boardId: string }) {
         data-testid={TID.notesColumn}
         data-empty={empty ? 'true' : 'false'}
         style={style}
+        onClick={onColumnClick}
+        onMouseOver={onColumnMouseOver}
       >
         <EditorContent editor={editor} />
       </div>

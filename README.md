@@ -98,7 +98,7 @@ Every page has a second, typed layer beside the drawing: the **notes column**. I
 
 - Enter: click the **Notes** button in the toolbar (after Text) or press `N`; the caret returns to where you left it on this page (and the view pans to it if it is off screen). Or double-click (mouse) or double-tap (pen, touch) inside the column with the select or text tool; on an empty page, double-click still makes free text.
 - Leave: press `Esc` (an open menu closes first), click the canvas outside the column (the click then does what the tool would), choose any tool, or switch page. The Pen, Eraser and Lasso tools always leave notes mode, so the pen always inks.
-- While it is off, clicks, marquees and ink go straight through the column to the canvas. Page links stay clickable.
+- While it is off, clicks, marquees and ink go straight through the column to the canvas. Page links stay clickable, and so do web links: a plain click on a link opens it in a new tab (only `http`, `https` and `mailto` links open). In notes mode a plain click on a link places the caret and `Ctrl+click` (`Cmd+click` on a Mac) opens it; hover shows the URL.
 - Touch and pen in the column: a finger drag pans the page and two fingers pinch-zoom, as everywhere; a finger tap or pen tap places the caret; the mouse selects text. Wheel over the column pans and zooms the page.
 - Inside the column `Ctrl+Z` and `Ctrl+Y` undo typing; drawing undo is separate.
 
@@ -220,7 +220,7 @@ docker compose -f compose.test.yaml down
 Screenshots of the scenarios land in `e2e/artifacts/screens/`, and a Playwright HTML report with traces of failures in `e2e/artifacts/report/` (both git-ignored). To iterate on a single spec:
 
 ```sh
-docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test
+docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test term-test
 docker compose -f compose.test.yaml run --rm --build e2e npx playwright test tests/arrows.spec.ts --retries 0
 docker compose -f compose.test.yaml down
 ```

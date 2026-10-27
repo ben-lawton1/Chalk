@@ -55,6 +55,17 @@ export function normalizeLinkUrl(raw: string): string {
   return 'https://' + t;
 }
 
+/** Only web and mail links are opened from the notes column (no javascript:, data:, file: ...). Relative hrefs do not count. */
+export function isSafeOpenUrl(href: string | null | undefined): boolean {
+  if (!href) return false;
+  try {
+    const p = new URL(href.trim()).protocol;
+    return p === 'http:' || p === 'https:' || p === 'mailto:';
+  } catch {
+    return false;
+  }
+}
+
 /** The part of the screen a popup must stay inside (client px). */
 export interface PopupBounds { left: number; top: number; right: number; bottom: number }
 /** The anchor line a popup hangs off, e.g. the caret's `coordsAtPos` (client px). */

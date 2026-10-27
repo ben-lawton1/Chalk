@@ -846,6 +846,9 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 .notes-column.active { pointer-events: auto; touch-action: none; }
 /* Chips (page links, N-C) stay clickable even in an inactive column. */
 .notes-column .page-link { pointer-events: auto; cursor: pointer; }
+/* Web links open on a plain click while notes mode is off; in notes mode a plain click edits and Ctrl/Cmd+click opens. */
+.notes-column a[href] { pointer-events: auto; cursor: pointer; }
+.notes-column.active a[href] { cursor: text; }
 .notes-column .notes-editor { outline: none; min-height: 1.5em; caret-color: var(--accent); word-break: break-word; overflow-wrap: anywhere; }
 .notes-column:not(.active) .notes-editor { caret-color: transparent; user-select: none; -webkit-user-select: none; }
 .notes-column.active .notes-editor { user-select: text; -webkit-user-select: text; }

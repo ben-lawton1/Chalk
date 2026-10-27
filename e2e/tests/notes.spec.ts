@@ -147,3 +147,50 @@ test('NOTES-5: the terminal panel and the notes coexist; menus stay inside the s
   await expect(page.getByTestId(TID.terminalPanel)).toBeHidden();
   await expect(editorEl(page)).toContainText('still typing');
 });
+
+test('NOTES-6: web links open on a plain click when notes mode is off, and on Ctrl+click in notes mode', async ({ page, request }) => {
+  const mark = (href: string) => [{ type: 'link', attrs: { href } }];
+  const notes = {
+    width: 760,
+    doc: {
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'docs', marks: mark('https://example.com/a') },
+          { type: 'text', text: ' and ' },
+          { type: 'text', text: 'bad', marks: mark('javascript:alert(1)') },
+        ],
+      }],
+    },
+  };
+  const host = await newBoard(request, { name: 'Links', notebook: unique('NB'), section: 'S1', scene: { type: 'chalk/scene', version: 4, elements: [], notes } });
+  await page.addInitScript(() => {
+    (window as any).__opens = [];
+    window.open = ((...args: unknown[]) => { (window as any).__opens.push(args); return null; }) as typeof window.open;
+  });
+  await withSidebar(page);
+  await openBoard(page, host.id);
+  const opens = (): Promise<unknown[][]> => page.evaluate(() => (window as any).__opens);
+  const link = editorEl(page).locator('a[href="https://example.com/a"]');
+  await expect(link).toHaveText('docs');
+  await expect(editorEl(page).locator('a[href="javascript:alert(1)"]')).toHaveCount(0); // Tiptap blanks it when rendering
+
+  // Notes mode off: a plain click opens the link and does not enter notes mode.
+  await link.hover();
+  await expect(link).toHaveAttribute('title', 'https://example.com/a');
+  await link.click();
+  await expect.poll(opens).toEqual([['https://example.com/a', '_blank', 'noopener,noreferrer']]);
+  expect((await app(page)).notesActive).toBe(false);
+
+  // Notes mode on: a plain click edits (no open); Ctrl+click opens.
+  await enter(page);
+  await link.hover();
+  await expect(link).toHaveAttribute('title', /Ctrl\+click to open/);
+  await link.click();
+  expect((await app(page)).notesActive).toBe(true);
+  expect(await opens()).toHaveLength(1);
+  await link.click({ modifiers: ['Control'] });
+  await expect.poll(async () => (await opens()).length).toBe(2);
+  expect((await opens())[1]).toEqual(['https://example.com/a', '_blank', 'noopener,noreferrer']);
+});
