@@ -2,7 +2,7 @@
 
 > The future of whiteboarding.
 
-Chalk is a small, readable, MIT-licensed whiteboard in the spirit of Excalidraw, organised like OneNote. Pages live in sections inside notebooks, stored as plain files in a folder on your PC. Each page starts in its top-left corner and grows right and down. Drag shapes onto it, type text anywhere, and connect boxes with arrows that stay attached when you move them. The rendering, geometry, arrow binding and text editor are our own code (about 11k lines of TypeScript, tests included, plus a small Python API), so you can read the whole engine in an afternoon and bend it to your own ideas.
+Chalk is a small, readable, MIT-licensed whiteboard in the spirit of Excalidraw, organised like OneNote. Pages live in sections inside notebooks, stored as plain files in a folder on your PC. Each page starts in its top-left corner and grows right and down. Drag shapes onto it, type text anywhere, and connect boxes with arrows that stay attached when you move them. The rendering, geometry, arrow binding and text editor are our own code (about 22k lines of TypeScript, Go and Python, tests included), so you can read the whole engine in an afternoon and bend it to your own ideas.
 
 Everything runs in Docker. Nothing is installed on your machine: no Node, no Python, no npm packages.
 
@@ -33,6 +33,8 @@ Check that the server is up: <http://localhost:8080/api/health> returns `{"statu
 - **Pages with a home corner:** like a OneNote page, the canvas starts at its top-left corner and extends without limit to the right and down. You can't scroll above or left of it. New pages open at 100% in that corner; `Home` (or the house button) takes you back. Pan with the wheel, Shift+wheel, Space+drag, middle mouse or the hand tool; zoom with Ctrl+wheel, the buttons or the keys; zoom to fit, zoom to selection, and a "Back to content" button.
 - **Notebooks, sections and pages:** the left sidebar shows your library as a tree (`Ctrl+\` hides it). Add, rename and delete notebooks, sections and pages from it; deleting needs a second click to confirm. Every page saves automatically, and the view of each page is remembered. If a page is changed somewhere else you get a conflict banner (Reload or Keep mine), and unsaved work is also backed up in the browser and restored after a crash or a lost connection.
 - **Pen and touch:** a stylus draws pressure-sensitive ink (the Pen button opens a tray with 3 pens, each with its own colour and size, plus an eraser and a lasso). The pen's eraser button erases and its barrel button lassos, like OneNote. A finger pans, two fingers pinch-zoom, a tap selects and a double tap edits; a resting palm is ignored. See [Pen and touch](#pen-and-touch).
+- **Page notes:** a typed, Notion-style document on every page, beside the drawing: headings, lists, to-dos, quotes, code, tables, callouts, a slash menu and links to other pages. Press `N`. It pans and zooms with the page and saves in the page file. See [Page notes](#page-notes).
+- **Terminal:** a real PowerShell, WSL or ssh terminal in a panel at the bottom of the window (`Ctrl+`` toggles it), through a small host helper you build with Docker. See [Terminal](#terminal).
 - **Dark theme:** a dark canvas, white strokes by default and a restrained green accent.
 - **Undo and redo** for every change, with merged slider and nudge steps.
 - **Files:** export and import `.chalk.json`, and export a crisp 2x PNG on the dark page background.
@@ -82,7 +84,103 @@ Press `?` in the app for the full list. The essentials:
 | `Shift+1` / `Shift+2` | Zoom to fit everything / to the selection |
 | `Home` | Back to the top-left of the page at 100% |
 | `Ctrl+\` | Show or hide the sidebar |
+| `` Ctrl+` `` | Show or hide the terminal |
 | `Ctrl+S` | Save now (autosave runs anyway) |
+| `N` | Type in the page notes (see [Page notes](#page-notes) for the notes keys) |
+
+## Page notes
+
+Every page has a second, typed layer beside the drawing: the **notes column**. It is a text document like a Notion page, anchored just inside the page's home corner (below the toolbar), 760 world px wide, growing down as you type. Press `Enter` for a new block; there is no box to place or drag.
+
+**How notes differ from free text.** Free text (the `T` tool) is a canvas object: you place it, drag it, style it, and it is drawn on the canvas in the handwriting font. Notes are one flowing document per page, in the UI font, with headings, lists, to-dos, tables, code and links to other pages. Notes pan and zoom with the page and have no background, so shapes and ink underneath stay visible, and you can draw and annotate over them. They are saved in the page file (scene version 4), so they sync, export and back up with the page. `.chalk.json` export and import carry the notes; a PNG export draws the canvas only, not the notes.
+
+**Notes mode.** Notes are static until you enter notes mode; then the column takes the keyboard and the pointer, and everything else waits.
+
+- Enter: click the **Notes** button in the toolbar (after Text) or press `N`; the caret returns to where you left it on this page (and the view pans to it if it is off screen). Or double-click (mouse) or double-tap (pen, touch) inside the column with the select or text tool; on an empty page, double-click still makes free text.
+- Leave: press `Esc` (an open menu closes first), click the canvas outside the column (the click then does what the tool would), choose any tool, or switch page. The Pen, Eraser and Lasso tools always leave notes mode, so the pen always inks.
+- While it is off, clicks, marquees and ink go straight through the column to the canvas. Page links stay clickable, and so do web links: a plain click on a link opens it in a new tab (only `http`, `https` and `mailto` links open). In notes mode a plain click on a link places the caret and `Ctrl+click` (`Cmd+click` on a Mac) opens it; hover shows the URL.
+- Touch and pen in the column: a finger drag pans the page and two fingers pinch-zoom, as everywhere; a finger tap or pen tap places the caret; the mouse selects text. Wheel over the column pans and zooms the page.
+- Inside the column `Ctrl+Z` and `Ctrl+Y` undo typing; drawing undo is separate.
+
+**Markdown shortcuts** (type at the start of a block, then a space):
+
+| Type | Result | Keys |
+|---|---|---|
+| `# `, `## `, `### ` | Heading 1, 2, 3 | `Ctrl+Alt+1/2/3` |
+| `- `, `* `, `+ ` | Bulleted list | `Ctrl+Shift+8` |
+| `1. ` (any number) | Numbered list | `Ctrl+Shift+7` |
+| `[] `, `[ ] `, `[x] ` | To-do list (click the box to tick it) | `Ctrl+Shift+9` |
+| `> ` or `" ` | Quote | |
+| `>> ` | Toggle list | |
+| `---` | Divider | |
+| ```` ``` ```` (plus a language) | Code block, highlighted | `Ctrl+Alt+C` |
+| `**b**`, `*i*` or `_i_`, `~~s~~`, `` `c` ``, `==h==` | Bold, italic, strike, inline code, highlight | `Ctrl+B`, `Ctrl+I`, `Ctrl+Shift+S`, `Ctrl+E`, `Ctrl+Shift+H` |
+| | Link | `Ctrl+K` |
+
+`Tab` and `Shift+Tab` nest and unnest list items (inside code: two spaces; inside a table: next and previous cell). `Alt+Shift+Up` and `Alt+Shift+Down` move the current block. `Enter` on an empty list item leaves the list.
+
+**Slash commands.** Type `/` at the start of a block or after a space. The text after it filters the list (titles and aliases; prefix matches first); `Up`, `Down`, `Tab` and `Shift+Tab` move, `Enter` or a click picks. `Esc` closes the menu and keeps what you typed. Commands:
+
+| Group | Command (aliases) |
+|---|---|
+| Basic blocks | Text (`/p`), Heading 1, 2, 3 (`/h1`, `/h2`, `/h3`, `/heading`), Bulleted list (`/bullet`, `/ul`), Numbered list (`/numbered`, `/ol`), To-do list (`/todo`, `/task`, `/checkbox`), Toggle list (`/toggle`), Quote (`/quote`), Divider (`/divider`, `/hr`), Callout (`/callout`, `/tip`) |
+| Code and data | Code block (`/code`, `/codeblock`), Inline code (`/inline`, `/inlinecode`), Table (`/table`, `/grid`) |
+| Links | Link to page (`/page`, `/link`), New page (`/newpage`), Web link (`/url`, `/web`) |
+| Style | Highlight (`/highlight`), Bold (`/bold`), Italic (`/italic`), Strikethrough (`/strike`) |
+
+**Tables.** `/table` switches the menu to a size step: rows and columns (`Tab` moves between them, `Enter` inserts; up to 50 by 12), a header-row checkbox and a live preview. Or type the size and press `Enter`: `/table 4x5` or `/table 4 5` inserts at once. In a table `Tab` moves to the next cell and adds a row at the end; a small toolbar appears while the caret is in a table (insert row above or below, column left or right, delete row, column or table).
+
+**Links to pages.** Type `@` or `[[` (or pick Link to page) to search every page in your library; pages in the current section come first, then the current notebook. The last row, `+ New page "<what you typed>"`, creates the page in this section without opening it and links it (`/newpage` does the same with an untitled page). A link is a chip showing the page's current name, so renames follow; a link to a deleted page is struck through. Click a chip to open the page, in notes mode or out of it. `/url` and `Ctrl+K` link a web address (an empty address removes the link).
+
+## Terminal
+
+Chalk can show a real terminal (PowerShell, WSL, or anything you configure, such as `ssh`) in a panel at the bottom of the window. A browser page and a Docker container can't start processes on your PC, so a small helper program, the **terminal bridge** (`chalk-terminal`, written in Go, source in `bridge/`), runs on Windows and connects the panel to a pseudo-terminal. The first part of this section describes the panel in Chalk; the rest is about the bridge.
+
+**Using the panel.** Click the terminal button at the top right of the window, or press `` Ctrl+` `` from anywhere (also from inside the terminal), to show or hide a panel docked at the bottom of the canvas. Opening it with no session starts the default profile (PowerShell on Windows). Drag its top edge to resize it (between 120 px and 70% of the window); the size and open state are remembered. Each session is a tab with a × to close it; `+` opens another session with the default profile, and `▾` lists every profile so you can pick one (for example WSL or an ssh profile from `terminal.json`). The right-hand buttons hide the panel (sessions keep running, and keep their output) and kill all sessions. Sessions survive switching pages; reloading the browser tab ends them. When a shell exits, its tab stays with "[process exited with code N]" and a Restart button. Inside the panel every key goes to the shell (Esc works in vim, `Ctrl+S` and `Ctrl+=` are not Chalk shortcuts there); `Ctrl+C` copies when text is selected and otherwise interrupts, and `Ctrl+V` pastes. If the helper isn't running, the panel says so, shows the command to start it and a Retry button, and checks again every 3 seconds on its own.
+
+**Build it** (Docker only; the Go toolchain never touches your PC). It is built locally from this source, so Windows SmartScreen has nothing to flag:
+
+```sh
+docker compose -f compose.tools.yaml run --rm bridge-build
+```
+
+This writes `bridge\dist\chalk-terminal.exe` (Windows) and `bridge/dist/chalk-terminal` (Linux), both git-ignored.
+
+**Run it:** double-click `bridge\dist\chalk-terminal.exe`, or from a terminal:
+
+```powershell
+bridge\dist\chalk-terminal.exe
+```
+
+It listens on `127.0.0.1:7681` and logs every session start and stop. Flags: `--addr` (default `127.0.0.1:7681`), `--config` (profiles file), `--allow-non-loopback` (see below) and `--version`. Chalk finds the bridge at the URL the server reports in `GET /api/config` (`terminalUrl`, from the environment variable `CHALK_TERMINAL_URL`, default `http://127.0.0.1:7681`).
+
+**Start it with Windows:** press Win+R, run `shell:startup`, and in that folder create a shortcut to `chalk-terminal.exe`. Open the shortcut's properties and set "Run" to "Minimized".
+
+**Profiles.** Built in: `powershell` (PowerShell 7 if `pwsh` is installed, otherwise Windows PowerShell) and `wsl` (only listed if `wsl.exe` exists), both starting in your home folder. Add your own in `%USERPROFILE%\.chalk\terminal.json` (or point `--config` at another file; the path in use is printed at startup, and a missing file is fine):
+
+```json
+{
+  "defaultProfile": "powershell",
+  "profiles": [
+    { "id": "homelab", "name": "homelab (ssh)", "command": "ssh", "args": ["me@192.168.1.10"] },
+    { "id": "repo", "name": "Chalk repo", "command": "pwsh.exe", "args": ["-NoLogo"], "cwd": "C:\\Users\\you\\code\\Chalk", "env": { "EDITOR": "code" } }
+  ],
+  "origins": [],
+  "hosts": []
+}
+```
+
+Each profile needs an `id` (1 to 32 letters, digits, `-` or `_`), a `name` and a `command`; `args`, `cwd` (`~` is your home folder) and `env` are optional. A profile with a built-in id replaces the built-in. `TERM=xterm-256color` and `COLORTERM=truecolor` are always set. `origins` and `hosts` extend the allowlists below.
+
+**Security model.** A terminal is remote code execution, so the bridge is strict. It listens on loopback only (a non-loopback `--addr` is refused unless you also pass `--allow-non-loopback`, which only the test stack does, inside its private Docker network). Every request must carry an `Origin` header that is on the allowlist (by default Chalk at `http://localhost:8080`, `http://127.0.0.1:8080`, and the dev server on port 5173) and a `Host` header that is `127.0.0.1:<port>` or `localhost:<port>` (this blocks DNS rebinding); anything else gets a 403. The browser only ever sends a profile **id**; the commands and arguments come from the built-ins and your config file, never from a request. At most 16 sessions run at once, and closing a session's socket kills its process tree.
+
+**Troubleshooting.**
+
+- *"cannot listen on 127.0.0.1:7681"*: another copy is already running (check the tray and Task Manager), or another program uses the port. Start the bridge with `--addr 127.0.0.1:7682` and set `CHALK_TERMINAL_URL=http://127.0.0.1:7682` for Chalk.
+- *The WSL profile is missing*: `wsl.exe` was not found on PATH. Install WSL (`wsl --install` in an administrator PowerShell) and restart the bridge.
+- *A request is refused with 403*: Chalk is being served from an origin the bridge doesn't know. Add it to `origins` in `terminal.json` (for example `"http://chalk.lan:8080"`) and restart the bridge.
+- *A profile you added doesn't show up, or the bridge exits at startup*: it prints the exact problem in `terminal.json`; fix it and start again.
+- Quick check from PowerShell: `Invoke-RestMethod -Headers @{Origin='http://localhost:8080'} http://127.0.0.1:7681/health` returns `ok`, `version` and `platform`.
 
 ## Development mode (hot reload)
 
@@ -106,6 +204,12 @@ docker compose -f compose.test.yaml run --rm web-unit npx vitest run src/core/bi
 docker compose -f compose.test.yaml run --rm api-unit                      # pytest
 ```
 
+Terminal bridge (Go; `go vet` for Linux and Windows, then `go test`, including a real pty round trip):
+
+```sh
+docker compose -f compose.tools.yaml run --rm bridge-unit
+```
+
 End-to-end tests (Playwright in Chromium against a throwaway instance of the production image; it always rebuilds first):
 
 ```sh
@@ -116,17 +220,21 @@ docker compose -f compose.test.yaml down
 Screenshots of the scenarios land in `e2e/artifacts/screens/`, and a Playwright HTML report with traces of failures in `e2e/artifacts/report/` (both git-ignored). To iterate on a single spec:
 
 ```sh
-docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test
+docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test term-test
 docker compose -f compose.test.yaml run --rm --build e2e npx playwright test tests/arrows.spec.ts --retries 0
 docker compose -f compose.test.yaml down
 ```
 
 The test instance has its own library in `/tmp` inside the container and never touches yours.
 
+The e2e stack also starts `term-test`, the Linux build of the terminal bridge, and points the test instance at it (`CHALK_TERMINAL_URL`). To run two checkouts or worktrees side by side, give each its own image tag and project name: `CHALK_TEST_TAG=mine docker compose -p chalk-test-mine -f compose.test.yaml run --rm --build api-unit`.
+
 ## Project structure
 
 ```
 Dockerfile, compose.yaml, compose.dev.yaml, compose.test.yaml   one image, three Compose projects
+compose.tools.yaml                                              build and test the terminal bridge
+bridge/             the host terminal bridge (Go): server.go, profiles.go, tests
 backend/app/        FastAPI app: models.py (API contract), library.py (the folder library), db.py (one-time v1 SQLite import), routes.py, main.py
 backend/tests/      pytest
 frontend/src/
@@ -138,6 +246,8 @@ frontend/src/
   input/       pointer router (mouse, pen buttons, palm rejection), touch gestures, keyboard shortcuts, clipboard
   persistence/ API client, board lifecycle, autosave and conflict handling, local backup
   ui/          the React chrome (toolbar, style panel, menus, dialogs, text editor)
+  ui/notes/    the page notes: Tiptap editor, layer, slash and page menus, extensions
+  ui/terminal/ the terminal dock panel (xterm, session client, tabs)
   testing/     the window.__CHALK__ hook used by the e2e suite
 e2e/tests/          Playwright specs, helpers and the shared test ids
 docs/HACKING.md     how to extend Chalk (add a shape, a tool, a style, ...)
@@ -154,7 +264,9 @@ These are deliberate omissions for a first version. Each has a clear seam, so yo
 | Rotation | Multiplies the cost of hit testing, resize, binding and the text overlay. Not requested. | Add `angle` plus `MIGRATIONS[2]`; the geometry functions all take an element. |
 | Multi-point, curved or elbow arrows | Straight connectors cover "connect boxes". | `ArrowElement.via?: Point[]`; `resolveArrow` uses the first and last segments. |
 | Point eraser, highlighter, pen tilt, ruler | The eraser removes whole strokes; the pen has no highlighter mode. | `tools/eraser.ts` (split `InkElement.points`), a pen kind in `PenSettings`. |
-| Typed note-taking | The next feature. | A flowing text element beside the free-placed `text` one. |
+| Images, equations and backlinks in the notes | The notes cover text, lists, tables, code and page links. | A new Tiptap node in `ui/notes/extensions/` (see HACKING), plus blob storage for images and an index over every page for backlinks. |
+| Notes in the PNG export | PNG export draws the canvas only. | Render the notes DOM into the export in `render/export.ts`. |
+| Terminal sessions across a reload | A reload closes the socket, and the bridge kills the process. | A session id the bridge keeps alive for a grace period. |
 | Groups and frames | Bookkeeping that would bloat the core. | `groupIds`, and selection expansion in `tools/select.ts`. |
 | Images and embeds | Needs blob storage. | `/api/files` plus an `image` element. |
 | Real-time collaboration, auth | This is a local single-user app. | Per-element version fields, a WebSocket route. |
@@ -203,6 +315,7 @@ Exact pins (all licenses are MIT, ISC, BSD, Apache-2.0, or OFL-1.1 for the font)
 | FastAPI / Pydantic / Uvicorn | 0.161.1 / 2.14.1 / 0.54.0 |
 | pytest / httpx2 | 9.1.1 / 2.16.0 |
 | Playwright (npm and image) | 1.64.1 / `mcr.microsoft.com/playwright:v1.64.1-noble` |
+| Go image / go-pty / coder/websocket | `golang:1.26.10-bookworm` / v0.2.3 / v1.8.15 |
 
 No fallback pins were needed: every version above works as written.
 

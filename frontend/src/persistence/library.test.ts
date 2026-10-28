@@ -13,6 +13,7 @@ vi.mock('./api', async (orig) => ({
   ...(await orig<typeof import('./api')>()),
   api: {
     health: vi.fn(),
+    getConfig: vi.fn(),
     listBoards: vi.fn(),
     getBoard: vi.fn(),
     createBoard: vi.fn(),
@@ -37,7 +38,7 @@ const tree = (...pages: BoardSummary[]): LibraryTree => ({
   notebooks: [{ name: 'Work', sections: [{ name: 'Projects', pages }] }],
 });
 const full = (p: BoardSummary): Board => ({
-  ...p, createdAt: 'x', scene: { type: 'chalk/scene', version: 3, elements: [] },
+  ...p, createdAt: 'x', scene: { type: 'chalk/scene', version: 4, elements: [] },
 });
 const here = (over: Record<string, unknown> = {}) => ({
   id: 'p1', name: 'Roadmap', version: 1, notebook: 'Work', section: 'Projects', ...over,

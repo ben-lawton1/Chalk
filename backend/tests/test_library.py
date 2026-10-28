@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.library import ConflictError, LibraryStore, NotFoundError, safe_name
 from app.main import create_app
 
-EMPTY = {"type": "chalk/scene", "version": 3, "elements": []}
+EMPTY = {"type": "chalk/scene", "version": 4, "elements": []}
 
 
 def mkpage(client, name="P", notebook=None, section=None, **kw):

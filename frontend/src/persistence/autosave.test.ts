@@ -9,7 +9,7 @@ import {
 import { toSceneFile } from '../core/serialize';
 import { clearHistory } from '../state/history';
 import { getState, resetState, setState } from '../state/store';
-import type { Board, BoardSummary, ChalkElement } from '../types';
+import type { Board, BoardSummary, ChalkElement, NotesDoc } from '../types';
 import { api, ApiError } from './api';
 import { clearBackup, writeBackup } from './backup';
 import { flushSave, forceSave, isDirty, markClean, resetAutosaveForTests, startAutosave } from './autosave';
@@ -18,6 +18,7 @@ vi.mock('./api', async (orig) => ({
   ...(await orig<typeof import('./api')>()),
   api: {
     health: vi.fn(),
+    getConfig: vi.fn(),
     listBoards: vi.fn(),
     getBoard: vi.fn(),
     createBoard: vi.fn(),
@@ -47,7 +48,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: 
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 3, elements: [...els] }));
+  vi.mocked(toSceneFile).mockImplementation((els, notes) => ({ type: 'chalk/scene', version: 4, elements: [...els], ...(notes ? { notes } : {}) }));
   resetAutosaveForTests();
   resetState({ board: { id: 'b1', name: 'N', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'saved' });
   clearHistory();
@@ -91,6 +92,82 @@ describe('dirty tracking', () => {
     expect(getState().saveStatus).toBe('saved');
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS * 2);
     expect(api.updateBoard).not.toHaveBeenCalled();
+  });
+});
+
+describe('page notes', () => {
+  const notesA = (): NotesDoc => ({ width: 760, doc: { type: 'doc', content: [{ type: 'paragraph' }] } });
+
+  it('a notes change makes the board dirty and schedules a save that carries the notes', async () => {
+    vi.mocked(api.updateBoard).mockResolvedValue(summary(2));
+    const notes = notesA();
+    setState({ notes });
+    expect(isDirty()).toBe(true);
+    expect(getState().saveStatus).toBe('dirty');
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(api.updateBoard).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.updateBoard).mock.calls[0]![1].scene?.notes).toBe(notes);
+    expect(getState().saveStatus).toBe('saved');
+    expect(isDirty()).toBe(false);
+  });
+
+  it('markClean takes the notes as the baseline; restoring them goes back to saved', () => {
+    const notes = notesA();
+    setState({ notes });
+    markClean();
+    expect(isDirty()).toBe(false);
+    setState({ notes: notesA() });
+    expect(isDirty()).toBe(true);
+    setState({ notes });
+    expect(isDirty()).toBe(false);
+    markClean([], 'N', null);
+    expect(isDirty()).toBe(true);
+  });
+
+  it('the failure backup and the page-leave backup include the notes', async () => {
+    vi.mocked(api.updateBoard).mockRejectedValue(new TypeError('offline'));
+    const notes = notesA();
+    setState({ notes });
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(vi.mocked(writeBackup).mock.calls[0]![0].scene.notes).toBe(notes);
+  });
+
+  it('409 whose fresh copy has the same elements but different notes is a conflict', async () => {
+    vi.mocked(api.updateBoard).mockRejectedValue(conflict());
+    vi.mocked(api.getBoard).mockResolvedValue({
+      id: 'b1', name: 'N', version: 9, updatedAt: 'x', createdAt: 'x',
+      scene: { type: 'chalk/scene', version: 4, elements: [] },
+    } as unknown as Board);
+    setState({ notes: notesA() });
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(getState().saveStatus).toBe('conflict');
+  });
+
+  it('409 whose fresh copy equals our notes adopts that version', async () => {
+    vi.mocked(api.updateBoard).mockRejectedValue(conflict());
+    const notes = notesA();
+    vi.mocked(api.getBoard).mockResolvedValue({
+      id: 'b1', name: 'N', version: 9, updatedAt: 'x', createdAt: 'x',
+      scene: { type: 'chalk/scene', version: 4, elements: [], notes: JSON.parse(JSON.stringify(notes)) },
+    } as unknown as Board);
+    setState({ notes });
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(getState().saveStatus).toBe('saved');
+    expect(getState().board?.version).toBe(9);
+  });
+
+  it('keep mine (forceSave) sends the local notes without a baseVersion', async () => {
+    vi.mocked(api.updateBoard).mockRejectedValueOnce(conflict()).mockResolvedValue(summary(10));
+    vi.mocked(api.getBoard).mockRejectedValue(new TypeError('offline'));
+    const notes = notesA();
+    setState({ notes });
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
+    expect(getState().saveStatus).toBe('conflict');
+    await forceSave();
+    const body = vi.mocked(api.updateBoard).mock.calls[1]![1];
+    expect('baseVersion' in body).toBe(false);
+    expect(body.scene?.notes).toBe(notes);
+    expect(getState().saveStatus).toBe('saved');
   });
 });
 
@@ -187,7 +264,7 @@ describe('conflicts', () => {
     vi.mocked(api.updateBoard).mockRejectedValue(conflict());
     vi.mocked(api.getBoard).mockResolvedValue({
       id: 'b1', name: 'N', version: 9, updatedAt: 'x', createdAt: 'x',
-      scene: { type: 'chalk/scene', version: 3, elements: [el('other')] },
+      scene: { type: 'chalk/scene', version: 4, elements: [el('other')] },
     } as Board);
     setState({ elements: [el('a')] });
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
@@ -214,7 +291,7 @@ describe('conflicts', () => {
     const sent = [el('a')];
     vi.mocked(api.getBoard).mockResolvedValue({
       id: 'b1', name: 'N', version: 9, updatedAt: 'x', createdAt: 'x',
-      scene: { type: 'chalk/scene', version: 3, elements: [{ id: 'a' } as unknown as ChalkElement] },
+      scene: { type: 'chalk/scene', version: 4, elements: [{ id: 'a' } as unknown as ChalkElement] },
     } as Board);
     setState({ elements: sent });
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);
@@ -229,7 +306,7 @@ describe('conflicts', () => {
     vi.mocked(api.updateBoard).mockRejectedValue(conflict());
     vi.mocked(api.getBoard).mockResolvedValue({
       id: 'b1', name: 'Server name', version: 9, updatedAt: 'x', createdAt: 'x',
-      scene: { type: 'chalk/scene', version: 3, elements: [{ id: 'a' } as unknown as ChalkElement] },
+      scene: { type: 'chalk/scene', version: 4, elements: [{ id: 'a' } as unknown as ChalkElement] },
     } as Board);
     setState({ elements: [el('a')] });
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DEBOUNCE_MS);

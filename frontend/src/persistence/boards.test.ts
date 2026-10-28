@@ -7,10 +7,10 @@ import {
   VIEWPORT_SAVE_DEBOUNCE_MS,
   VIEWPORT_STORAGE_PREFIX,
 } from '../constants';
-import { parseSceneFile, toSceneFile } from '../core/serialize';
+import { parseSceneFile, parseSceneNotes, toSceneFile } from '../core/serialize';
 import { clearHistory } from '../state/history';
 import { getState, resetState, setState } from '../state/store';
-import type { Board, BoardSummary, ChalkElement, SceneFile } from '../types';
+import type { Board, BoardSummary, ChalkElement, NotesDoc, SceneFile } from '../types';
 import { api, ApiError } from './api';
 import { clearBackup, readBackup } from './backup';
 import type { BoardBackup } from './backup';
@@ -29,6 +29,7 @@ vi.mock('./api', async (orig) => ({
   ...(await orig<typeof import('./api')>()),
   api: {
     health: vi.fn(),
+    getConfig: vi.fn(),
     listBoards: vi.fn(),
     getBoard: vi.fn(),
     createBoard: vi.fn(),
@@ -41,7 +42,7 @@ vi.mock('../state/actions');
 vi.mock('./backup');
 
 const el = (id: string): ChalkElement => ({ id }) as unknown as ChalkElement;
-const scene: SceneFile = { type: 'chalk/scene', version: 3, elements: [] };
+const scene: SceneFile = { type: 'chalk/scene', version: 4, elements: [] };
 const board = (id: string, over: Partial<Board> = {}): Board => ({
   id, name: 'Board ' + id, version: 3, updatedAt: 'x', createdAt: 'x', scene, notebook: 'NB', section: 'Sec', ...over,
 });
@@ -68,7 +69,8 @@ beforeEach(() => {
   resetState();
   clearHistory();
   vi.mocked(parseSceneFile).mockReturnValue([]);
-  vi.mocked(toSceneFile).mockImplementation((els) => ({ type: 'chalk/scene', version: 3, elements: [...els] }));
+  vi.mocked(parseSceneNotes).mockReturnValue(null);
+  vi.mocked(toSceneFile).mockImplementation((els, notes) => ({ type: 'chalk/scene', version: 4, elements: [...els], ...(notes ? { notes } : {}) }));
   vi.mocked(readBackup).mockReturnValue(null);
 });
 
@@ -144,7 +146,7 @@ describe('initBoards', () => {
 describe('openBoard and backups', () => {
   const backupFor = (baseVersion: number): BoardBackup => ({
     boardId: 'b1', baseVersion, savedAt: 'x', name: 'Board b1',
-    scene: { type: 'chalk/scene', version: 3, elements: [el('mine')] },
+    scene: { type: 'chalk/scene', version: 4, elements: [el('mine')] },
   });
 
   it('restores a backup whose baseVersion matches and autosave sees it as dirty', async () => {
@@ -212,7 +214,7 @@ describe('openBoard and backups', () => {
   });
 
   it('a v1 scene is loaded migrated and left dirty so autosave writes the v2 file back', () => {
-    loadIntoState(board('b9', { scene: { type: 'chalk/scene', version: 1 as unknown as 3, elements: [] } }));
+    loadIntoState(board('b9', { scene: { type: 'chalk/scene', version: 1 as unknown as 4, elements: [] } }));
     expect(isDirty()).toBe(true);
   });
 
@@ -387,3 +389,55 @@ describe('resolveConflict', () => {
     expect(getState().board?.version).toBe(10);
   });
 });
+
+describe('page notes', () => {
+  const notesA = (): NotesDoc => ({ width: 760, doc: { type: 'doc', content: [{ type: 'paragraph' }] } });
+
+  it('loadIntoState loads the notes of the scene and treats them as saved', () => {
+    const notes = notesA();
+    vi.mocked(parseSceneNotes).mockReturnValue(notes);
+    loadIntoState(board('b1'));
+    expect(getState().notes).toBe(notes);
+    expect(getState().notesActive).toBe(false);
+    expect(isDirty()).toBe(false);
+  });
+
+  it('a scene without notes loads with notes null (and a stale mock result of undefined too)', () => {
+    setState({ notes: notesA(), notesActive: true });
+    vi.mocked(parseSceneNotes).mockReturnValue(null);
+    loadIntoState(board('b1'));
+    expect(getState().notes).toBeNull();
+    expect(getState().notesActive).toBe(false);
+  });
+
+  it('restores the notes of a matching backup and the board is dirty', async () => {
+    const notes = notesA();
+    const backup: BoardBackup = { boardId: 'b1', baseVersion: 3, savedAt: 'x', name: 'Board b1', scene: { type: 'chalk/scene', version: 4, elements: [], notes } };
+    vi.mocked(readBackup).mockReturnValue(backup);
+    vi.mocked(api.getBoard).mockResolvedValue(board('b1', { version: 3 }));
+    vi.mocked(parseSceneNotes).mockImplementation((input) => (input === backup.scene ? notes : null));
+    await openBoard('b1', { skipFlush: true });
+    expect(getState().notes).toBe(notes);
+    expect(isDirty()).toBe(true);
+  });
+
+  it('conflict reload replaces local notes with the server notes', async () => {
+    const theirs = notesA();
+    resetState({ board: { id: 'b1', name: 'Mine', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'conflict', notes: { width: 500, doc: { type: 'doc' } } });
+    vi.mocked(api.getBoard).mockResolvedValue(board('b1', { version: 9 }));
+    vi.mocked(parseSceneNotes).mockReturnValue(theirs);
+    await resolveConflict('reload');
+    expect(getState().notes).toBe(theirs);
+    expect(isDirty()).toBe(false);
+  });
+
+  it('conflict keep-mine saves the local notes', async () => {
+    const mine = notesA();
+    resetState({ board: { id: 'b1', name: 'Mine', version: 1, notebook: 'NB', section: 'Sec' }, saveStatus: 'conflict', notes: mine });
+    vi.mocked(api.updateBoard).mockResolvedValue({ id: 'b1', name: 'Mine', version: 10, updatedAt: 'x', notebook: 'NB', section: 'Sec' });
+    await resolveConflict('overwrite');
+    expect(vi.mocked(api.updateBoard).mock.calls[0]![1].scene?.notes).toBe(mine);
+    expect(getState().notes).toBe(mine);
+  });
+});
+

@@ -1,6 +1,6 @@
 // Scene file parsing, migrations and defensive restore of imported elements (WP1).
 import type {
-  ArrowElement, Binding, ChalkElement, InkPoint, Point, SceneFile, ShapeElement, Style, TextElement,
+  ArrowElement, Binding, ChalkElement, InkPoint, NotesDoc, Point, SceneFile, ShapeElement, Style, TextElement,
 } from '../types';
 import {
   ARROWHEADS, DEFAULT_STYLE, EDGES, FILL_STYLES, FONT_FAMILIES, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE, SCENE_FILE_TYPE,
@@ -13,6 +13,7 @@ import { normaliseInk } from './ink';
 import { withMeasuredText } from './text';
 import { getCommonBounds, isBindable } from './geometry';
 import { moveElements } from './scene';
+import { restoreNotes } from './notes';
 import { indexById, updateBoundArrows } from './binding';
 
 export class SceneParseError extends Error {
@@ -57,10 +58,18 @@ export const MIGRATIONS: Record<number, (file: Record<string, unknown>) => Recor
   1: migrateV1ToV2,
   /** v2 -> v3 added the `ink` element; v2 files need no change. The bump stops an old cached tab from dropping ink when it saves. */
   2: (f) => f,
+  /** v3 -> v4 added the page `notes`; v3 files have none. The bump stops an old cached tab from dropping notes when it saves. */
+  3: (f) => f,
 };
 
-export function toSceneFile(elements: readonly ChalkElement[]): SceneFile {
-  return { type: SCENE_FILE_TYPE, version: SCENE_FILE_VERSION, elements: [...elements] };
+/** `notes` is omitted from the file when null or absent. Clipboard payloads never pass it. */
+export function toSceneFile(elements: readonly ChalkElement[], notes?: NotesDoc | null): SceneFile {
+  return { type: SCENE_FILE_TYPE, version: SCENE_FILE_VERSION, elements: [...elements], ...(notes ? { notes } : {}) };
+}
+
+/** The page notes of a scene file, validated; null when absent or invalid (bad notes never fail the load). Never throws. */
+export function parseSceneNotes(input: unknown): NotesDoc | null {
+  return isPlainObject(input) ? restoreNotes(input.notes) : null;
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {

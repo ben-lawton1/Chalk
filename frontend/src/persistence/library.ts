@@ -1,5 +1,6 @@
 // Notebook library client: tree refresh, notebook/section/page operations for the sidebar, and the sidebar preferences.
 // Folder names are sent exactly as the tree returns them; the server may change a new name (suffix, "-"), so callers adopt what comes back.
+import { MAX_BOARD_NAME_LENGTH } from '../constants';
 import { getState, setState, subscribe } from '../state/store';
 import type { BoardMeta, LibraryTree } from '../types';
 import { api } from './api';
@@ -191,4 +192,17 @@ export async function deleteNotebook(notebook: string): Promise<void> {
   await api.deleteNotebook(notebook);
   if (hit) await openFirstOrCreate();
   await refreshLibrary();
+}
+
+/**
+ * Creates a page in the current page's notebook and section WITHOUT opening it (used by the notes' "New page" link), refreshes the
+ * sidebar tree, and returns the new page's id and final name. Rejects when the server refuses.
+ */
+export async function createPageQuietly(name?: string): Promise<{ id: string; name: string }> {
+  const cur = getState().board;
+  const where = cur && cur.notebook && cur.section ? { notebook: cur.notebook, section: cur.section } : undefined;
+  const clean = name?.trim().slice(0, MAX_BOARD_NAME_LENGTH);
+  const board = await api.createBoard({ ...(clean ? { name: clean } : {}), ...(where ?? {}) });
+  await refreshLibrary().catch(() => undefined);
+  return { id: board.id, name: board.name };
 }

@@ -4,7 +4,7 @@ import { NUDGE, NUDGE_SHIFT } from '../constants';
 import { getState, resetState, setInteraction, setSelection, setState } from '../state/store';
 import * as actions from '../state/actions';
 import { flushSave } from '../persistence/autosave';
-import { handleKeyDown, SHORTCUTS, type KeyLike } from './keyboard';
+import { handleKeyDown, inTerminalPanel, SHORTCUTS, TERMINAL_TOGGLE_EVENT, type KeyLike } from './keyboard';
 import { cancelGesture, isTextEntry } from './pointer';
 
 vi.mock('../state/actions');
@@ -256,10 +256,54 @@ describe('edit and tool keys', () => {
 
 describe('SHORTCUTS', () => {
   it('covers every group and has no empty fields', () => {
-    expect(new Set(SHORTCUTS.map((s) => s.group))).toEqual(new Set(['Tools', 'Edit', 'View', 'File', 'Pen & touch']));
+    expect(new Set(SHORTCUTS.map((s) => s.group))).toEqual(new Set(['Tools', 'Edit', 'View', 'File', 'Pen & touch', 'Notes']));
     for (const s of SHORTCUTS) {
       expect(s.keys).not.toBe('');
       expect(s.description).not.toBe('');
     }
+  });
+});
+
+describe('terminal panel', () => {
+  const inside = t({ tagName: 'TEXTAREA', closest: (sel: string) => (sel === '.terminal-panel' ? {} : null) });
+  const outside = t({ tagName: 'DIV', closest: () => null });
+
+  it('inTerminalPanel looks for the .terminal-panel ancestor', () => {
+    expect(inTerminalPanel(inside)).toBe(true);
+    expect(inTerminalPanel(outside)).toBe(false);
+    expect(inTerminalPanel(null)).toBe(false);
+    expect(inTerminalPanel(t({ tagName: 'DIV' }))).toBe(false);
+  });
+
+  it('Ctrl+backquote toggles the terminal from anywhere, also from inside it', () => {
+    const target = new EventTarget();
+    const seen = vi.fn();
+    target.addEventListener(TERMINAL_TOGGLE_EVENT, seen);
+    vi.stubGlobal('window', target);
+    try {
+      expect(handleKeyDown(ctrl('`', { code: 'Backquote' }))).toBe(true);
+      expect(handleKeyDown(ctrl('`', { code: 'Backquote', target: inside }))).toBe(true);
+      expect(seen).toHaveBeenCalledTimes(2);
+      expect(handleKeyDown(ctrl('`', { code: 'Backquote', repeat: true }))).toBe(true);
+      expect(seen).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('Ctrl+S and the zoom combos are not taken inside the terminal, but still are outside', () => {
+    expect(handleKeyDown(ctrl('s', { target: inside }))).toBe(false);
+    expect(handleKeyDown(ctrl('=', { code: 'Equal', target: inside }))).toBe(false);
+    expect(handleKeyDown(ctrl('-', { code: 'Minus', target: inside }))).toBe(false);
+    expect(handleKeyDown(ctrl('0', { code: 'Digit0', target: inside }))).toBe(false);
+    expect(actions.zoomIn).not.toHaveBeenCalled();
+    expect(actions.resetZoom).not.toHaveBeenCalled();
+    expect(handleKeyDown(ctrl('=', { code: 'Equal', target: outside }))).toBe(true);
+    expect(actions.zoomIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('plain keys typed in the terminal are not shortcuts', () => {
+    expect(handleKeyDown(key('r', { target: inside }))).toBe(false);
+    expect(handleKeyDown(key('Escape', { target: t({ tagName: 'BUTTON', closest: () => ({}) }) }))).toBe(false);
   });
 });

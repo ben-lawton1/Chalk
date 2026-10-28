@@ -5,6 +5,7 @@ import { Canvas } from './Canvas';
 import { HelpDialog } from './HelpDialog';
 import { Hints } from './Hints';
 import { Icon } from './icons';
+import { NotesLayer } from './notes/NotesLayer';
 import { PenTray } from './PenTray';
 import { Sidebar } from './Sidebar';
 import { StylePanel } from './StylePanel';
@@ -13,6 +14,7 @@ import { Toast } from './Toast';
 import { Toolbar } from './Toolbar';
 import { TopBar } from './TopBar';
 import { ZoomControls } from './ZoomControls';
+import { TerminalButton, TerminalPanel } from './terminal/TerminalPanel';
 import { useAppState } from './hooks';
 
 export function App() {
@@ -23,12 +25,15 @@ export function App() {
       {/* The stage is everything right of the sidebar: canvas and text editor share its coordinate space. */}
       <div className="stage">
         <Canvas />
+        <NotesLayer />
         <TextEditor />
       </div>
       <TopBar />
       <Toolbar />
       <PenTray />
       <StylePanel />
+      <TerminalButton />
+      <TerminalPanel />
       <ZoomControls />
       <Hints />
       <button

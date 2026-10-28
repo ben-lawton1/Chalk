@@ -6,7 +6,7 @@ import { hitTest } from '../core/geometry';
 import { panBy, pinchViewport } from '../core/viewport';
 import { selectTool, isOverSelection } from '../tools/select';
 import { getState, setInteraction, setSelection, setViewport } from '../state/store';
-import { commitEditing, createTextAt, startEditing } from '../state/actions';
+import { commitEditing, createTextAt, enterNotesIfInColumn, startEditing } from '../state/actions';
 import { createTapTracker } from './taps';
 
 /**
@@ -67,6 +67,8 @@ export function createTouchGestures(now: () => number = Date.now): TouchGestures
     const hit = hitTest(s.elements, info.world, s.viewport.zoom, TOUCH_HIT_TOLERANCE_PX); // hollow hits count: fingers are imprecise
     const el = hit?.element ?? null;
     const isDouble = taps.tap(info.screen);
+    // A double tap on empty canvas inside the notes column enters notes mode (select and text tools).
+    if (isDouble && !el && (s.tool === 'select' || s.tool === 'text') && enterNotesIfInColumn(info.world)) return;
     if (s.tool === 'text' && el?.type !== 'ink') {
       // The text tool keeps working with touch: tap a shape or text to edit it, tap empty canvas to write.
       if (el) startEditing(el.id);

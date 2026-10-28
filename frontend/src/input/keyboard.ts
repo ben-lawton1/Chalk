@@ -4,13 +4,22 @@ import { NUDGE, NUDGE_SHIFT } from '../constants';
 import { toolForKey } from '../tools';
 import { getState, notify } from '../state/store';
 import {
-  clearSelection, closeDialog, deleteSelection, duplicateSelection, editSelection, goHome, nudgeSelection, openDialog, redo,
+  clearSelection, closeDialog, deleteSelection, duplicateSelection, editSelection, enterNotesMode, goHome, leaveNotesMode, nudgeSelection, openDialog, redo,
   reorderSelection, resetZoom, selectAll, setTool, toggleSidebar, toggleToolLock, undo, zoomIn, zoomOut, zoomToFit, zoomToSelection,
 } from '../state/actions';
 import { flushSave } from '../persistence/autosave';
 import { cancelGesture, isTextEntry } from './pointer';
 
 export type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat'> & { target: EventTarget | null };
+
+/** Window event the terminal dock listens for (input/ may not import ui/, so Ctrl+` is a message). */
+export const TERMINAL_TOGGLE_EVENT = 'chalk:terminal-toggle';
+
+/** True when the event target is inside the terminal dock: everything there belongs to the shell. */
+export function inTerminalPanel(t: EventTarget | null): boolean {
+  const el = t as { closest?: (sel: string) => unknown } | null;
+  return typeof el?.closest === 'function' && Boolean(el.closest('.terminal-panel'));
+}
 
 const ARROW_DELTAS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
@@ -37,8 +46,15 @@ export function handleKeyDown(e: KeyLike): boolean {
   const lower = (e.key ?? '').toLowerCase();
   const s0 = getState();
 
-  // 0. Save and zoom combos run before every guard (also while typing).
-  if (mod && !e.altKey) {
+  // Ctrl+` toggles the terminal from anywhere, including from inside it.
+  if (mod && !e.altKey && code === 'Backquote') {
+    if (!e.repeat && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(TERMINAL_TOGGLE_EVENT));
+    return true;
+  }
+  const inTerm = inTerminalPanel(e.target);
+
+  // 0. Save and zoom combos run before every guard (also while typing), except inside the terminal where the shell owns them.
+  if (mod && !e.altKey && !inTerm) {
     const isSave = lower === 's';
     const isIn = code === 'Equal' || code === 'NumpadAdd';
     const isOut = code === 'Minus' || code === 'NumpadSubtract';
@@ -54,7 +70,7 @@ export function handleKeyDown(e: KeyLike): boolean {
   }
 
   // 1-2. Typing targets and the text editor keep their keys.
-  if (isTextEntry(e.target)) return false;
+  if (isTextEntry(e.target) || inTerm) return false;
   if (s0.editing) return false;
 
   // 3. Dialogs: only Escape.
@@ -69,6 +85,7 @@ export function handleKeyDown(e: KeyLike): boolean {
   // 4. Escape, and no commands during a gesture.
   if (e.key === 'Escape') {
     if (s0.interaction.gestureActive) cancelGesture();
+    else if (s0.notesActive) leaveNotesMode(); // focus left the editor but notes mode is still on
     else if (s0.selectedIds.length > 0) clearSelection();
     else setTool('select');
     return true;
@@ -158,6 +175,10 @@ export function handleKeyDown(e: KeyLike): boolean {
   // 10. Tool keys: only with no modifier at all.
   if (!e.shiftKey && !e.altKey) {
     const key = code.startsWith('Digit') ? code.slice(5) : lower;
+    if (key === 'n') {
+      if (!e.repeat) enterNotesMode();
+      return true;
+    }
     if (key === 'q') {
       if (!e.repeat) toggleToolLock();
       return true;
@@ -211,6 +232,7 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'P', description: 'Pen (click the Pen button for the 3 pens, eraser and lasso)', group: 'Tools' },
   { keys: 'E', description: 'Eraser', group: 'Tools' },
   { keys: 'Q', description: 'Keep the tool after drawing (lock)', group: 'Tools' },
+  { keys: 'N', description: 'Notes: type in the page\'s notes column (Esc to leave)', group: 'Tools' },
   { keys: 'Double-click', description: 'Edit text or label; on empty canvas: new text', group: 'Edit' },
   { keys: 'Enter', description: 'Edit the selected text or label', group: 'Edit' },
   { keys: 'Esc or Ctrl + Enter (while typing)', description: 'Finish editing', group: 'Edit' },
@@ -238,6 +260,7 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'Ctrl + 0', description: 'Zoom to 100%', group: 'View' },
   { keys: 'Home', description: 'Back to the top-left of the page', group: 'View' },
   { keys: 'Ctrl + \\', description: 'Show or hide the sidebar', group: 'View' },
+  { keys: 'Ctrl + `', description: 'Show or hide the terminal (inside it, every key goes to the shell)', group: 'View' },
   { keys: 'Shift + 1', description: 'Zoom to fit everything', group: 'View' },
   { keys: 'Shift + 2', description: 'Zoom to selection', group: 'View' },
   { keys: 'Finger drag', description: 'Pan (the selection moves instead when you drag on it)', group: 'Pen & touch' },
@@ -246,6 +269,26 @@ export const SHORTCUTS: readonly ShortcutInfo[] = [
   { keys: 'Double tap', description: 'Edit text or label; on empty canvas: new text', group: 'Pen & touch' },
   { keys: 'Pen eraser button + drag', description: 'Erase what the pen passes over', group: 'Pen & touch' },
   { keys: 'Pen barrel button + drag', description: 'Lasso: select several, then move, delete, duplicate or style', group: 'Pen & touch' },
+  { keys: 'N or Notes button', description: 'Type in the page notes; the caret returns to where you left it', group: 'Notes' },
+  { keys: 'Double-click in the notes column', description: 'Start typing there (notes mode)', group: 'Notes' },
+  { keys: 'Esc', description: 'Leave notes mode (a menu closes first)', group: 'Notes' },
+  { keys: '/', description: 'Slash menu: blocks, table (/table 4x5), links. Esc closes it and keeps the text', group: 'Notes' },
+  { keys: '@ or [[', description: 'Link to another page (a chip; click it to open the page)', group: 'Notes' },
+  { keys: '# , ## , ### + space', description: 'Heading 1, 2, 3', group: 'Notes' },
+  { keys: '- , * or + then space', description: 'Bulleted list', group: 'Notes' },
+  { keys: '1. + space', description: 'Numbered list', group: 'Notes' },
+  { keys: '[] + space', description: 'To-do list ([x] for done)', group: 'Notes' },
+  { keys: '> + space, " + space', description: 'Quote', group: 'Notes' },
+  { keys: '>> + space', description: 'Toggle list', group: 'Notes' },
+  { keys: '---', description: 'Divider', group: 'Notes' },
+  { keys: '```', description: 'Code block (add a language, then Enter)', group: 'Notes' },
+  { keys: '**b**  *i*  ~~s~~  `c`  ==h==', description: 'Bold, italic, strike, inline code, highlight', group: 'Notes' },
+  { keys: 'Ctrl + B / I / Shift + S / E / Shift + H', description: 'Bold, italic, strike, inline code, highlight', group: 'Notes' },
+  { keys: 'Ctrl + Alt + 1 / 2 / 3', description: 'Heading 1, 2, 3', group: 'Notes' },
+  { keys: 'Ctrl + Shift + 7 / 8 / 9', description: 'Numbered, bulleted, to-do list', group: 'Notes' },
+  { keys: 'Ctrl + K', description: 'Link', group: 'Notes' },
+  { keys: 'Tab / Shift + Tab', description: 'Nest or unnest a list item; 2 spaces in code; next cell in a table', group: 'Notes' },
+  { keys: 'Alt + Shift + Up / Down', description: 'Move the block', group: 'Notes' },
   { keys: 'Ctrl + S', description: 'Save now', group: 'File' },
   { keys: '?', description: 'Show shortcuts', group: 'File' },
 ];

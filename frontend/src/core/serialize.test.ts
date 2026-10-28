@@ -1,12 +1,12 @@
 // Unit tests for core/serialize: scene file envelope and defensive restore (WP1).
 import { describe, expect, it } from 'vitest';
-import type { ArrowElement, ChalkElement, InkElement, ShapeElement, TextElement } from '../types';
-import { DEFAULT_STYLE, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE } from '../constants';
+import type { ArrowElement, ChalkElement, InkElement, NotesDoc, ShapeElement, TextElement } from '../types';
+import { DEFAULT_STYLE, MAX_FONT_SIZE, MIN_FONT_SIZE, MIN_SHAPE_SIZE, NOTES_MAX_DEPTH, NOTES_MAX_NODES, NOTES_MAX_TEXT_LENGTH } from '../constants';
 import { isValidSeed } from './ids';
 import { createInk } from './ink';
 import { updateBoundArrows } from './binding';
 import { createArrow, createShape, createText, setElementText } from './scene';
-import { MIGRATIONS, parseSceneFile, restoreElements, restoreStyle, SceneParseError, toSceneFile } from './serialize';
+import { MIGRATIONS, parseSceneFile, parseSceneNotes, restoreElements, restoreStyle, SceneParseError, toSceneFile } from './serialize';
 
 function envelope(elements: unknown, over: Record<string, unknown> = {}): Record<string, unknown> {
   return { type: 'chalk/scene', version: 2, elements, ...over };
@@ -33,8 +33,8 @@ describe('SceneParseError / MIGRATIONS', () => {
     expect(e.name).toBe('SceneParseError');
     expect(e.message).toBe('boom');
   });
-  it('MIGRATIONS has the v1 -> v2 and the identity v2 -> v3 steps', () => {
-    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2']);
+  it('MIGRATIONS has the v1 -> v2 step and the identity v2 -> v3 and v3 -> v4 steps', () => {
+    expect(Object.keys(MIGRATIONS)).toEqual(['1', '2', '3']);
     const f = { type: 'chalk/scene', version: 2, elements: [] };
     expect(MIGRATIONS[2]!(f)).toBe(f);
   });
@@ -57,7 +57,7 @@ describe('toSceneFile / parseSceneFile round trip', () => {
     const els = sampleScene();
     const f = toSceneFile(els);
     expect(f.type).toBe('chalk/scene');
-    expect(f.version).toBe(3);
+    expect(f.version).toBe(4);
     expect(f.elements).toEqual(els);
     expect(f.elements).not.toBe(els);
     expect(toSceneFile([]).elements).toEqual([]);
@@ -91,7 +91,7 @@ describe('parseSceneFile rejects bad envelopes', () => {
     expect(() => parseSceneFile(envelope([], { version: v }))).toThrow(SceneParseError);
   });
   it('rejects a future version with a clear message', () => {
-    expect(() => parseSceneFile(envelope([], { version: 4 }))).toThrow('This file was made by a newer Chalk');
+    expect(() => parseSceneFile(envelope([], { version: 5 }))).toThrow('This file was made by a newer Chalk');
     expect(() => parseSceneFile(envelope([], { version: 99 }))).toThrow(SceneParseError);
   });
   it('rejects when elements is not an array', () => {

@@ -1,10 +1,14 @@
 // Command entry points for UI, keyboard, clipboard and tools: one undo entry per command (WP3).
-import type { ChalkElement, PenSettings, Point, ReorderDir, ShapeKind, Size, Snapshot, Style, ToolId, Viewport } from '../types';
+import type { AppState, ChalkElement, NotesDoc, PenSettings, Point, Rect, ReorderDir, ShapeKind, Size, Snapshot, Style, ToolId, Viewport } from '../types';
 import { DUPLICATE_OFFSET, FIT_MAX_ZOOM, FIT_PADDING_PX, ZOOM_STEP_FACTOR } from '../constants';
 import { SHAPES } from '../core/shapes';
 import { lineHeightPx, withMeasuredText } from '../core/text';
 import { fitToBounds, screenToWorld, viewportCenter, zoomAt } from '../core/viewport';
 import { getCommonBounds } from '../core/geometry';
+import { unionRects } from '../core/math';
+import { isNotesEmpty } from '../core/notes';
+import { inNotesColumn } from '../core/notesView';
+import { getNotesHost } from './notesHost';
 import { updateBoundArrows } from '../core/binding';
 import {
   addElements, applyStyleToElements, cloneWithNewIds, createShape, createText, duplicateElements, fitShapeToLabel,
@@ -25,6 +29,7 @@ let clipboardBuffer: string | null = null;
 
 export function setTool(tool: ToolId): void {
   commitEditing();
+  leaveNotesMode(); // choosing a tool ends notes mode
   // The pen tray belongs to the pen, eraser and lasso; any other tool closes it.
   setState(tool === 'pen' || tool === 'eraser' || tool === 'lasso' ? { tool } : { tool, penTrayOpen: false });
   // Written inline: state/* may not import tools/* (§4.2). Drawing tools = everything but select, hand and the ink tools
@@ -219,10 +224,12 @@ export function placeShape(kind: ShapeKind, screen: Point): string {
   return el.id;
 }
 
-export function replaceScene(elements: readonly ChalkElement[]): void {
+/** Replaces the elements (one undo entry) and, when `notes` is given, the page notes too (no undo entry: the editor owns its history). */
+export function replaceScene(elements: readonly ChalkElement[], notes?: NotesDoc | null): void {
   commitEditing();
   const before = takeSnapshot();
   setElements(elements);
+  if (notes !== undefined) setNotes(notes);
   setSelection([]);
   pushUndo(before);
   setInteraction({ hoverId: null, bindTarget: null });
@@ -340,8 +347,15 @@ export function goHome(): void {
   setViewport({ scrollX: 0, scrollY: 0, zoom: 1 });
 }
 
+/** Elements bounds plus the notes column when the notes are not empty (null when there is nothing). */
+export function contentBounds(s: AppState = getState()): Rect | null {
+  const els = getCommonBounds(s.elements);
+  if (!s.notesBounds || isNotesEmpty(s.notes)) return els;
+  return els ? unionRects(els, s.notesBounds) : s.notesBounds;
+}
+
 export function zoomToFit(opts?: { maxZoom?: number }): void {
-  const bounds = getCommonBounds(getState().elements);
+  const bounds = contentBounds();
   setViewport(fitToBounds(bounds, viewSize(), { padding: FIT_PADDING_PX, maxZoom: opts?.maxZoom ?? FIT_MAX_ZOOM }));
 }
 
@@ -365,6 +379,49 @@ export function openDialog(d: 'help'): void {
 
 export function closeDialog(): void {
   setState({ dialog: 'none' });
+}
+
+/** Replaces the page notes. No undo entry: the editor owns its history. */
+export function setNotes(notes: NotesDoc | null): void {
+  setState({ notes });
+}
+
+export function setNotesActive(on: boolean): void {
+  setState({ notesActive: on });
+}
+
+/**
+ * Enters notes mode: finishes any text editing, turns the ink tools off (the pen must always ink), then focuses the editor with the
+ * caret at `world` (a double-click) or at the remembered caret. A no-op focus when no editor is mounted yet.
+ */
+export function enterNotesMode(world: Point | null = null): void {
+  commitEditing();
+  const s = getState();
+  if (s.tool === 'pen' || s.tool === 'eraser' || s.tool === 'lasso') setState({ tool: 'select', penTrayOpen: false });
+  setNotesActive(true);
+  getNotesHost()?.focusAt(world);
+}
+
+/** Leaves notes mode (saves the caret and blurs the editor). No-op when it is already off. */
+export function leaveNotesMode(): void {
+  if (!getState().notesActive) return;
+  getNotesHost()?.blur();
+  setNotesActive(false);
+}
+
+/** The double-click / double-tap entry: when `world` is inside the notes column, enters notes mode there and returns true. */
+export function enterNotesIfInColumn(world: Point): boolean {
+  const s = getState();
+  if (!inNotesColumn(world, s.notesBounds, !isNotesEmpty(s.notes))) return false;
+  enterNotesMode(world);
+  return true;
+}
+
+/** The measured world rect of the rendered notes column (null when not measured). */
+export function setNotesBounds(rect: Rect | null): void {
+  const cur = getState().notesBounds;
+  if (cur === rect || (cur && rect && cur.x === rect.x && cur.y === rect.y && cur.width === rect.width && cur.height === rect.height)) return;
+  setState({ notesBounds: rect });
 }
 
 export function setSidebarOpen(open: boolean): void {

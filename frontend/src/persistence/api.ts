@@ -1,5 +1,5 @@
 // Typed fetch client for the /api backend; non-2xx becomes ApiError (WP5).
-import type { Board, BoardCreateRequest, BoardSummary, BoardUpdateRequest, FolderInfo, HealthResponse, LibraryTree } from '../types';
+import type { AppConfig, Board, BoardCreateRequest, BoardSummary, BoardUpdateRequest, FolderInfo, HealthResponse, LibraryTree } from '../types';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -14,6 +14,7 @@ export class ApiError extends Error {
 
 export interface Api {
   health(): Promise<HealthResponse>;
+  getConfig(): Promise<AppConfig>;
   listBoards(): Promise<BoardSummary[]>;
   getBoard(id: string): Promise<Board>;
   createBoard(body: BoardCreateRequest): Promise<Board>;
@@ -62,6 +63,7 @@ const enc = encodeURIComponent;
 
 export const api: Api = {
   health: () => request<HealthResponse>('GET', '/health'),
+  getConfig: () => request<AppConfig>('GET', '/config'),
   listBoards: () => request<BoardSummary[]>('GET', '/boards'),
   getBoard: (id) => request<Board>('GET', `/boards/${enc(id)}`),
   createBoard: (body) => request<Board>('POST', '/boards', body),

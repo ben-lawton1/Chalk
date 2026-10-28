@@ -10,3 +10,4 @@ __pycache__/
 *.db-shm
 e2e/artifacts/
 .env
+bridge/dist/

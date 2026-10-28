@@ -1,8 +1,9 @@
 // window.__CHALK__ test hook installed in every build (WP0).
-import type { ChalkElement, ChalkTestHook, Point } from '../types';
+import type { ChalkElement, ChalkTestHook, NotesDoc, Point } from '../types';
 import { getState } from '../state/store';
 import { screenToWorld, worldToScreen } from '../core/viewport';
 import { getBounds } from '../core/geometry';
+import { notesText } from '../core/notes';
 import { flushSave } from '../persistence/autosave';
 import { whenRendered } from '../render/canvas';
 
@@ -21,6 +22,8 @@ export function installTestHook(): void {
     isReady: () => { const s = getState(); return s.board !== null && s.saveStatus !== 'loading'; },
     getElements: () => structuredClone([...getState().elements]) as ChalkElement[],
     getSelectedIds: () => [...getState().selectedIds],
+    getNotes: () => { const n = getState().notes; return n ? structuredClone(n) as NotesDoc : null; },
+    getNotesText: () => notesText(getState().notes),
     getAppState: () => {
       const s = getState();
       return {
@@ -29,6 +32,7 @@ export function installTestHook(): void {
         boardVersion: s.board?.version ?? null, saveStatus: s.saveStatus, canUndo: s.canUndo, canRedo: s.canRedo,
         dialog: s.dialog,
         pens: s.pens.map((p) => ({ ...p })), activePen: s.activePen, penButtonsSwapped: s.penButtonsSwapped, penTrayOpen: s.penTrayOpen,
+        notesActive: s.notesActive,
         interaction: {
           marquee: s.interaction.marquee, bindTargetId: s.interaction.bindTarget?.elementId ?? null,
           hoverId: s.interaction.hoverId, dropPreview: s.interaction.dropPreview, gestureActive: s.interaction.gestureActive,

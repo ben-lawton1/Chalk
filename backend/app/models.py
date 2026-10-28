@@ -5,7 +5,8 @@ Was FROZEN after WP0 (v1's parallel build); v2 may edit it.
 Field names are camelCase on purpose so they match the JSON wire format
 exactly, with no alias machinery. Scene *elements* are opaque JSON: the
 backend validates only the envelope ({type, version, elements}) and the size,
-so the frontend element schema can evolve without backend changes.
+so the frontend element schema can evolve without backend changes. The optional
+v4 `notes` document is opaque too.
 
 baseVersion semantics (BoardUpdate): an integer means a checked write
 (409 when it differs from the stored version); omitted or null means a
@@ -18,7 +19,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 SCENE_TYPE = "chalk/scene"
-SCENE_VERSION = 3
+SCENE_VERSION = 4
 MAX_SCENE_BYTES = 10_000_000
 DEFAULT_BOARD_NAME = "Untitled page"
 MAX_NAME_LENGTH = 120
@@ -58,6 +59,10 @@ def clean_name(value: str | None) -> str | None:
 
 class Health(BaseModel):
     status: Literal["ok"]
+
+
+class AppConfig(BaseModel):
+    terminalUrl: str
 
 
 class BoardSummary(BaseModel):
