@@ -52,7 +52,7 @@ def create_app(library_dir: str | None = None, static_dir: str | None = None, db
         """Never cache HTML; cache hashed assets forever."""
         response = await call_next(request)
         path = request.url.path
-        # Only Chalk itself and the configured embed origins may frame it (it has a terminal).
+        # Only Chalk itself and the configured embed origins (Atlas) may frame it.
         response.headers["Content-Security-Policy"] = "frame-ancestors 'self' " + " ".join(embed_origins())
         if not path.startswith("/api"):
             if path == "/" or path.endswith(".html"):

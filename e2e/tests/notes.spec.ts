@@ -1,10 +1,10 @@
-import { test, expect, TID, tidPage, tidRowMenu, tidRowRename, tidSlashItem, app, newBoard, openBoard, freshBoard, flush, waitReady, withSidebar, shot } from './helpers';
+import { test, expect, TID, tidPage, tidRowMenu, tidRowRename, tidSlashItem, app, newBoard, openBoard, freshBoard, flush, waitReady, withSidebar } from './helpers';
 import type { Page } from '@playwright/test';
 
 // Notes e2e that fills the gaps left by notes-editor.spec.ts (editor, markdown, caret, pass-through, zoom) and notes-menus.spec.ts
 // (slash menu, /table, @ links). Covered there, by plan item: basic text + reload, markdown shortcuts, /code /inline /h2, /table (size step,
 // direct form, Tab), Esc twice, @ chip + click, pass-through + double-click, the N key caret, Ctrl+K, /newpage, the welcome hint, zoom to fit.
-// Here: /url, rename-updates-chip, task checkbox across a reload, notes across a page switch, and the terminal panel next to the notes.
+// Here: /url, rename-updates-chip, task checkbox across a reload, notes across a page switch.
 const notesText = (page: Page): Promise<string> => page.evaluate(() => (window as any).__CHALK__.getNotesText());
 const notesDoc = (page: Page): Promise<any> => page.evaluate(() => (window as any).__CHALK__.getNotes());
 const editorEl = (page: Page) => page.getByTestId(TID.notesEditor);
@@ -113,11 +113,8 @@ test('NOTES-4: notes survive a page switch through the sidebar and coming back',
   await expect.poll(() => notesText(page)).toBe('only on B');
 });
 
-test('NOTES-5: the terminal panel and the notes coexist; menus stay inside the stage, above the panel', async ({ page, request }) => {
+test('NOTES-5: slash and page menus stay inside the stage while typing', async ({ page, request }) => {
   await freshBoard(page, request);
-  await page.getByTestId(TID.terminalButton).click();
-  await expect(page.getByTestId(TID.terminalPanel)).toBeVisible();
-  await expect(page.getByTestId(TID.terminalTab).first()).toHaveAttribute('data-status', 'running', { timeout: 15_000 });
   await enter(page);
   for (let i = 0; i < 25; i++) {
     await page.keyboard.type(`line ${i}`);
@@ -126,13 +123,10 @@ test('NOTES-5: the terminal panel and the notes coexist; menus stay inside the s
   await page.keyboard.type('/');
   const menu = page.getByTestId(TID.slashMenu);
   await expect(menu).toBeVisible();
-  const panel = (await page.getByTestId(TID.terminalPanel).boundingBox())!;
   const stage = (await page.locator('.stage').boundingBox())!;
   const m = (await menu.boundingBox())!;
-  expect(m.y + m.height).toBeLessThanOrEqual(panel.y + 1);
   expect(m.y + m.height).toBeLessThanOrEqual(stage.y + stage.height + 1);
   expect(m.y).toBeGreaterThanOrEqual(stage.y - 1);
-  await shot(page, 'notes-with-terminal');
   await page.keyboard.type('h2');
   await page.keyboard.press('Enter');
   await page.keyboard.type('still typing');
@@ -142,13 +136,9 @@ test('NOTES-5: the terminal panel and the notes coexist; menus stay inside the s
   await page.keyboard.type('@');
   const pm = page.getByTestId(TID.pageMenu);
   await expect(pm).toBeVisible();
-  const pb = (await pm.boundingBox())!;
-  expect(pb.y + pb.height).toBeLessThanOrEqual(panel.y + 1);
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   expect((await app(page)).notesActive).toBe(false);
-  await page.keyboard.press('Control+Backquote');
-  await expect(page.getByTestId(TID.terminalPanel)).toBeHidden();
   await expect(editorEl(page)).toContainText('still typing');
 });
 

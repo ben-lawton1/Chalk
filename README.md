@@ -34,7 +34,6 @@ Check that the server is up: <http://localhost:8080/api/health> returns `{"statu
 - **Notebooks, sections and pages:** the left sidebar shows your library as a tree (`Ctrl+\` hides it). Add, rename and delete notebooks, sections and pages from it; deleting needs a second click to confirm. Every page saves automatically, and the view of each page is remembered. If a page is changed somewhere else you get a conflict banner (Reload or Keep mine), and unsaved work is also backed up in the browser and restored after a crash or a lost connection.
 - **Pen and touch:** a stylus draws pressure-sensitive ink (the Pen button opens a tray with 3 pens, each with its own colour and size, plus an eraser and a lasso). The pen's eraser button erases and its barrel button lassos, like OneNote. A finger pans, two fingers pinch-zoom, a tap selects and a double tap edits; a resting palm is ignored. See [Pen and touch](#pen-and-touch).
 - **Page notes:** a typed, Notion-style document on every page, beside the drawing: headings, lists, to-dos, quotes, code, tables, callouts, a slash menu and links to other pages. Press `N`. It pans and zooms with the page and saves in the page file. See [Page notes](#page-notes).
-- **Terminal:** a real PowerShell, WSL or ssh terminal in a panel at the bottom of the window (`Ctrl+`` toggles it), through a small host helper you build with Docker. See [Terminal](#terminal).
 - **Dark theme:** a dark canvas, white strokes by default and a restrained green accent.
 - **Undo and redo** for every change, with merged slider and nudge steps.
 - **Files:** export and import `.chalk.json`, and export a crisp 2x PNG on the dark page background.
@@ -84,7 +83,6 @@ Press `?` in the app for the full list. The essentials:
 | `Shift+1` / `Shift+2` | Zoom to fit everything / to the selection |
 | `Home` | Back to the top-left of the page at 100% |
 | `Ctrl+\` | Show or hide the sidebar |
-| `` Ctrl+` `` | Show or hide the terminal |
 | `Ctrl+S` | Save now (autosave runs anyway) |
 | `N` | Type in the page notes (see [Page notes](#page-notes) for the notes keys) |
 
@@ -143,53 +141,7 @@ Inside an iframe with `embed=1`, Chalk also listens for `postMessage` commands f
 
 ## Terminal
 
-Chalk can show a real terminal (PowerShell, WSL, or anything you configure, such as `ssh`) in a panel at the bottom of the window. A browser page and a Docker container can't start processes on your PC, so a small helper program, the **terminal bridge** (`chalk-terminal`, written in Go, source in `bridge/`), runs on Windows and connects the panel to a pseudo-terminal. The first part of this section describes the panel in Chalk; the rest is about the bridge.
-
-**Using the panel.** Click the terminal button at the top right of the window, or press `` Ctrl+` `` from anywhere (also from inside the terminal), to show or hide a panel docked at the bottom of the canvas. Opening it with no session starts the default profile (PowerShell on Windows). Drag its top edge to resize it (between 120 px and 70% of the window); the size and open state are remembered. Each session is a tab with a × to close it; `+` opens another session with the default profile, and `▾` lists every profile so you can pick one (for example WSL or an ssh profile from `terminal.json`). The right-hand buttons hide the panel (sessions keep running, and keep their output) and kill all sessions. Sessions survive switching pages; reloading the browser tab ends them. When a shell exits, its tab stays with "[process exited with code N]" and a Restart button. Inside the panel every key goes to the shell (Esc works in vim, `Ctrl+S` and `Ctrl+=` are not Chalk shortcuts there); `Ctrl+C` copies when text is selected and otherwise interrupts, and `Ctrl+V` pastes. If the helper isn't running, the panel says so, shows the command to start it and a Retry button, and checks again every 3 seconds on its own.
-
-**Build it** (Docker only; the Go toolchain never touches your PC). It is built locally from this source, so Windows SmartScreen has nothing to flag:
-
-```sh
-docker compose -f compose.tools.yaml run --rm bridge-build
-```
-
-This writes `bridge\dist\chalk-terminal.exe` (Windows) and `bridge/dist/chalk-terminal` (Linux), both git-ignored.
-
-**Run it:** double-click `bridge\dist\chalk-terminal.exe`, or from a terminal:
-
-```powershell
-bridge\dist\chalk-terminal.exe
-```
-
-It listens on `127.0.0.1:7681` and logs every session start and stop. Flags: `--addr` (default `127.0.0.1:7681`), `--config` (profiles file), `--allow-non-loopback` (see below) and `--version`. Chalk finds the bridge at the URL the server reports in `GET /api/config` (`terminalUrl`, from the environment variable `CHALK_TERMINAL_URL`, default `http://127.0.0.1:7681`).
-
-**Start it with Windows:** press Win+R, run `shell:startup`, and in that folder create a shortcut to `chalk-terminal.exe`. Open the shortcut's properties and set "Run" to "Minimized".
-
-**Profiles.** Built in: `powershell` (PowerShell 7 if `pwsh` is installed, otherwise Windows PowerShell) and `wsl` (only listed if `wsl.exe` exists), both starting in your home folder. Add your own in `%USERPROFILE%\.chalk\terminal.json` (or point `--config` at another file; the path in use is printed at startup, and a missing file is fine):
-
-```json
-{
-  "defaultProfile": "powershell",
-  "profiles": [
-    { "id": "homelab", "name": "homelab (ssh)", "command": "ssh", "args": ["me@192.168.1.10"] },
-    { "id": "repo", "name": "Chalk repo", "command": "pwsh.exe", "args": ["-NoLogo"], "cwd": "C:\\Users\\you\\code\\Chalk", "env": { "EDITOR": "code" } }
-  ],
-  "origins": [],
-  "hosts": []
-}
-```
-
-Each profile needs an `id` (1 to 32 letters, digits, `-` or `_`), a `name` and a `command`; `args`, `cwd` (`~` is your home folder) and `env` are optional. A profile with a built-in id replaces the built-in. `TERM=xterm-256color` and `COLORTERM=truecolor` are always set. `origins` and `hosts` extend the allowlists below.
-
-**Security model.** A terminal is remote code execution, so the bridge is strict. It listens on loopback only (a non-loopback `--addr` is refused unless you also pass `--allow-non-loopback`, which only the test stack does, inside its private Docker network). Every request must carry an `Origin` header that is on the allowlist (by default Chalk at `http://localhost:8080`, `http://127.0.0.1:8080`, and the dev server on port 5173) and a `Host` header that is `127.0.0.1:<port>` or `localhost:<port>` (this blocks DNS rebinding); anything else gets a 403. The browser only ever sends a profile **id**; the commands and arguments come from the built-ins and your config file, never from a request. At most 16 sessions run at once, and closing a session's socket kills its process tree.
-
-**Troubleshooting.**
-
-- *"cannot listen on 127.0.0.1:7681"*: another copy is already running (check the tray and Task Manager), or another program uses the port. Start the bridge with `--addr 127.0.0.1:7682` and set `CHALK_TERMINAL_URL=http://127.0.0.1:7682` for Chalk.
-- *The WSL profile is missing*: `wsl.exe` was not found on PATH. Install WSL (`wsl --install` in an administrator PowerShell) and restart the bridge.
-- *A request is refused with 403*: Chalk is being served from an origin the bridge doesn't know. Add it to `origins` in `terminal.json` (for example `"http://chalk.lan:8080"`) and restart the bridge.
-- *A profile you added doesn't show up, or the bridge exits at startup*: it prints the exact problem in `terminal.json`; fix it and start again.
-- Quick check from PowerShell: `Invoke-RestMethod -Headers @{Origin='http://localhost:8080'} http://127.0.0.1:7681/health` returns `ok`, `version` and `platform`.
+The terminal moved to Atlas (github.com/ben-lawton1/Atlas).
 
 ## Development mode (hot reload)
 
@@ -213,11 +165,6 @@ docker compose -f compose.test.yaml run --rm web-unit npx vitest run src/core/bi
 docker compose -f compose.test.yaml run --rm api-unit                      # pytest
 ```
 
-Terminal bridge (Go; `go vet` for Linux and Windows, then `go test`, including a real pty round trip):
-
-```sh
-docker compose -f compose.tools.yaml run --rm bridge-unit
-```
 
 End-to-end tests (Playwright in Chromium against a throwaway instance of the production image; it always rebuilds first):
 
@@ -229,21 +176,19 @@ docker compose -f compose.test.yaml down
 Screenshots of the scenarios land in `e2e/artifacts/screens/`, and a Playwright HTML report with traces of failures in `e2e/artifacts/report/` (both git-ignored). To iterate on a single spec:
 
 ```sh
-docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test term-test
+docker compose -f compose.test.yaml up -d --build --force-recreate --wait app-test
 docker compose -f compose.test.yaml run --rm --build e2e npx playwright test tests/arrows.spec.ts --retries 0
 docker compose -f compose.test.yaml down
 ```
 
 The test instance has its own library in `/tmp` inside the container and never touches yours.
 
-The e2e stack also starts `term-test`, the Linux build of the terminal bridge, and points the test instance at it (`CHALK_TERMINAL_URL`). To run two checkouts or worktrees side by side, give each its own image tag and project name: `CHALK_TEST_TAG=mine docker compose -p chalk-test-mine -f compose.test.yaml run --rm --build api-unit`.
+To run two checkouts or worktrees side by side, give each its own image tag and project name: `CHALK_TEST_TAG=mine docker compose -p chalk-test-mine -f compose.test.yaml run --rm --build api-unit`.
 
 ## Project structure
 
 ```
 Dockerfile, compose.yaml, compose.dev.yaml, compose.test.yaml   one image, three Compose projects
-compose.tools.yaml                                              build and test the terminal bridge
-bridge/             the host terminal bridge (Go): server.go, profiles.go, tests
 backend/app/        FastAPI app: models.py (API contract), library.py (the folder library), db.py (one-time v1 SQLite import), routes.py, main.py
 backend/tests/      pytest
 frontend/src/
@@ -256,7 +201,6 @@ frontend/src/
   persistence/ API client, board lifecycle, autosave and conflict handling, local backup
   ui/          the React chrome (toolbar, style panel, menus, dialogs, text editor)
   ui/notes/    the page notes: Tiptap editor, layer, slash and page menus, extensions
-  ui/terminal/ the terminal dock panel (xterm, session client, tabs)
   testing/     the window.__CHALK__ hook used by the e2e suite
 e2e/tests/          Playwright specs, helpers and the shared test ids
 docs/HACKING.md     how to extend Chalk (add a shape, a tool, a style, ...)
@@ -275,7 +219,6 @@ These are deliberate omissions for a first version. Each has a clear seam, so yo
 | Point eraser, highlighter, pen tilt, ruler | The eraser removes whole strokes; the pen has no highlighter mode. | `tools/eraser.ts` (split `InkElement.points`), a pen kind in `PenSettings`. |
 | Images, equations and backlinks in the notes | The notes cover text, lists, tables, code and page links. | A new Tiptap node in `ui/notes/extensions/` (see HACKING), plus blob storage for images and an index over every page for backlinks. |
 | Notes in the PNG export | PNG export draws the canvas only. | Render the notes DOM into the export in `render/export.ts`. |
-| Terminal sessions across a reload | A reload closes the socket, and the bridge kills the process. | A session id the bridge keeps alive for a grace period. |
 | Groups and frames | Bookkeeping that would bloat the core. | `groupIds`, and selection expansion in `tools/select.ts`. |
 | Images and embeds | Needs blob storage. | `/api/files` plus an `image` element. |
 | Real-time collaboration, auth | This is a local single-user app. | Per-element version fields, a WebSocket route. |

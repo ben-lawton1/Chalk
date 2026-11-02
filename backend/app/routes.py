@@ -25,7 +25,6 @@ from app.models import (
     empty_scene,
 )
 
-DEFAULT_TERMINAL_URL = "http://127.0.0.1:7681"
 DEFAULT_EMBED_ORIGINS = "http://localhost:8090,http://127.0.0.1:8090"
 
 
@@ -83,7 +82,7 @@ def health() -> Health:
 
 @router.get("/config", response_model=AppConfig)
 def get_config() -> AppConfig:
-    return AppConfig(terminalUrl=os.environ.get("CHALK_TERMINAL_URL") or DEFAULT_TERMINAL_URL, embedOrigins=embed_origins())
+    return AppConfig(embedOrigins=embed_origins())
 
 
 @router.get("/library", response_model=LibraryTree)

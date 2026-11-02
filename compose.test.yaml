@@ -15,32 +15,14 @@ services:
     environment:
       CHALK_LIBRARY_DIR: /tmp/chalk-e2e-library
       CHALK_DB_PATH: ""
-      CHALK_TERMINAL_URL: http://term-test:7681
       CHALK_EMBED_ORIGINS: http://embed-host.test:9000
     healthcheck: *health
-  term-test:                        # the host bridge (Linux build) for the terminal e2e; private network only
-    image: chalk-term-test:${CHALK_TEST_TAG:-local}
-    build:
-      context: ./bridge
-      target: runtime
-    command: ["--addr", "0.0.0.0:7681", "--allow-non-loopback", "--config", "/etc/chalk-terminal.json"]
-    volumes:
-      - ./bridge/testdata/e2e-terminal.json:/etc/chalk-terminal.json:ro
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "-H", "Origin: http://app-test:8000", "http://term-test:7681/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 2s
-      start_interval: 1s
   e2e:
     image: chalk-e2e:${CHALK_TEST_TAG:-local}
     build:
       context: ./e2e
     depends_on:
       app-test:
-        condition: service_healthy
-      term-test:
         condition: service_healthy
     environment:
       BASE_URL: http://app-test:8000

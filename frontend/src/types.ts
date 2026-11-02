@@ -481,7 +481,6 @@ export interface HealthResponse {
 }
 
 export interface AppConfig {
-  terminalUrl: string;
   embedOrigins: string[];
 }
 
