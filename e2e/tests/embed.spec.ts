@@ -1,6 +1,6 @@
 // Embed mode (Atlas contract D13). The parent is a fake host page at http://embed-host.test:9000 (served through page.route),
 // which is the origin app-test is configured with in CHALK_EMBED_ORIGINS (compose.test.yaml).
-import { test, expect, TID, newBoard, app } from './helpers';
+import { test, expect, TID, tidNotebook, newBoard, app, waitReady } from './helpers';
 import type { Page } from '@playwright/test';
 
 const HOST = 'http://embed-host.test:9000';
@@ -80,4 +80,56 @@ test('EMB-2: standalone ?board= opens that page, and the sidebar is open without
   await page.goto(`/?board=${b.id}`);
   await expect.poll(async () => (await app(page)).boardId).toBe(b.id);
   await expect(page.getByTestId(TID.sidebar)).toHaveAttribute('data-open', 'true');
+});
+
+test('EMB-3: library-changed both ways, and Ctrl+backquote is forwarded (D24)', async ({ page, request }) => {
+  const a = await newBoard(request, { name: 'Sync A' });
+  await openHost(page, `?board=${a.id}&embed=1`);
+  const chalk = page.frameLocator('#f');
+  await expect.poll(async () => (await ofType(page, 'chalk:ready')).length).toBe(1);
+  await page.evaluate(() => (window as any).__send({ source: 'atlas', type: 'chalk:set-sidebar', open: true }));
+  await expect(chalk.getByTestId(TID.sidebar)).toHaveAttribute('data-open', 'true');
+
+  // Chalk's own sidebar change is announced to the parent (and nothing was announced before it)
+  expect(await ofType(page, 'chalk:library-changed')).toHaveLength(0);
+  await chalk.getByTestId(TID.sidebarNewNotebook).click();
+  await expect.poll(async () => (await ofType(page, 'chalk:library-changed')).length).toBeGreaterThan(0);
+  const evt = (await ofType(page, 'chalk:library-changed'))[0]!;
+  expect(evt.origin).toBe('http://app-test:8000');
+  expect(evt.data).toEqual({ source: 'chalk', type: 'chalk:library-changed' });
+
+  // Atlas changed the library: a new notebook shows up after library-changed, and no echo goes back
+  const nb = `FromAtlas${Date.now()}`;
+  const res = await request.post('/api/notebooks', { data: { name: nb } });
+  expect(res.status()).toBe(201);
+  const before = (await ofType(page, 'chalk:library-changed')).length;
+  await page.evaluate(() => (window as any).__send({ source: 'atlas', type: 'chalk:library-changed' }));
+  await expect(chalk.getByTestId(tidNotebook(nb))).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await ofType(page, 'chalk:library-changed')).toHaveLength(before);
+
+  // The open page was deleted from Atlas: toast, then another page opens
+  const doomed = await newBoard(request, { name: 'Doomed' });
+  await page.evaluate((id) => (window as any).__send({ source: 'atlas', type: 'chalk:open-board', id }), doomed.id);
+  await expect.poll(async () => (await ofType(page, 'chalk:board')).map((m) => m.data.id).includes(doomed.id)).toBe(true);
+  expect((await request.delete(`/api/boards/${doomed.id}`)).status()).toBe(204);
+  await page.evaluate(() => (window as any).__send({ source: 'atlas', type: 'chalk:library-changed' }));
+  await expect(chalk.getByTestId(TID.toast)).toHaveText('Page not found');
+  await expect.poll(async () => (await ofType(page, 'chalk:board')).at(-1)!.data.id).not.toBe(doomed.id);
+
+  // Ctrl+` inside embedded Chalk goes to the parent
+  await chalk.getByTestId(TID.sidebarCollapse).click();
+  expect(await ofType(page, 'chalk:toggle-terminal')).toHaveLength(0);
+  await page.keyboard.press('Control+Backquote');
+  await expect.poll(async () => (await ofType(page, 'chalk:toggle-terminal')).length).toBe(1);
+  expect((await ofType(page, 'chalk:toggle-terminal'))[0]!.data).toEqual({ source: 'chalk', type: 'chalk:toggle-terminal' });
+});
+
+test('EMB-4: standalone Chalk ignores Ctrl+backquote and has no terminal', async ({ page, request }) => {
+  await newBoard(request, { name: 'Plain' });
+  await page.goto('/');
+  await waitReady(page);
+  await page.keyboard.press('Control+Backquote');
+  await expect(page.locator('.terminal-panel, .terminal-button')).toHaveCount(0);
+  expect(((await (await request.get('/api/config')).json()) as Record<string, unknown>).terminalUrl).toBeUndefined();
 });

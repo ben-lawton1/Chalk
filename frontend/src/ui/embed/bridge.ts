@@ -1,11 +1,12 @@
 // postMessage bridge for embed mode (Atlas contract D13, see docs/HACKING.md). Active only inside a frame started with ?embed=1.
 // Inbound: validated by core/embed.parseInbound (origin allow-list + source). Outbound: only to the parent's origin.
-import { cleanOrigins, isEmbedded, originOf, parseInbound, targetOrigins } from '../../core/embed';
+import { cleanOrigins, isEmbedded, isTerminalToggleKey, originOf, parseInbound, targetOrigins } from '../../core/embed';
 import type { EmbedOutbound } from '../../core/embed';
 import { setSidebarOpen, toggleSidebar } from '../../state/actions';
 import { getState, notify, subscribe } from '../../state/store';
 import { api, ApiError } from '../../persistence/api';
 import { openBoard } from '../../persistence/boards';
+import { onLibraryChanged, reloadAfterExternalChange } from '../../persistence/library';
 
 /** The parent's origin as far as the browser tells us (Chromium: ancestorOrigins; others: the referrer). */
 function guessParentOrigin(): string | null {
@@ -23,6 +24,8 @@ export function startEmbedBridge(): () => void {
   if (typeof window === 'undefined' || !isEmbedded(window.location.search, window)) return () => {};
   let stopped = false;
   let unsub: (() => void) | null = null;
+  let unsubLibrary: (() => void) | null = null;
+  let onKey: ((e: KeyboardEvent) => void) | null = null;
   let onMessage: ((e: MessageEvent) => void) | null = null;
 
   void (async () => {
@@ -81,6 +84,9 @@ export function startEmbedBridge(): () => void {
         case 'toggle-sidebar':
           toggleSidebar();
           break;
+        case 'library-changed':
+          reloadAfterExternalChange().catch(() => notify('Could not reload the library', 'error'));
+          break;
         case 'open-board':
           if (getState().board?.id === cmd.id) break;
           openBoard(cmd.id).catch((err: unknown) => {
@@ -91,6 +97,13 @@ export function startEmbedBridge(): () => void {
       }
     };
     window.addEventListener('message', onMessage);
+    onKey = (e: KeyboardEvent): void => {
+      if (!isTerminalToggleKey(e)) return;
+      e.preventDefault();
+      send({ source: 'chalk', type: 'chalk:toggle-terminal' });
+    };
+    window.addEventListener('keydown', onKey, true);
+    unsubLibrary = onLibraryChanged(() => send({ source: 'chalk', type: 'chalk:library-changed' }));
     unsub = subscribe(publish);
     publish();
   })();
@@ -99,5 +112,7 @@ export function startEmbedBridge(): () => void {
     stopped = true;
     if (onMessage) window.removeEventListener('message', onMessage);
     if (unsub) unsub();
+    if (unsubLibrary) unsubLibrary();
+    if (onKey) window.removeEventListener('keydown', onKey, true);
   };
 }

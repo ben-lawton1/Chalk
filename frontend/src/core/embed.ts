@@ -3,12 +3,15 @@
 export type EmbedCommand =
   | { kind: 'set-sidebar'; open: boolean }
   | { kind: 'toggle-sidebar' }
-  | { kind: 'open-board'; id: string };
+  | { kind: 'open-board'; id: string }
+  | { kind: 'library-changed' };
 
 export type EmbedOutbound =
   | { source: 'chalk'; type: 'chalk:ready' }
   | { source: 'chalk'; type: 'chalk:sidebar'; open: boolean }
-  | { source: 'chalk'; type: 'chalk:board'; id: string; name: string };
+  | { source: 'chalk'; type: 'chalk:board'; id: string; name: string }
+  | { source: 'chalk'; type: 'chalk:library-changed' }
+  | { source: 'chalk'; type: 'chalk:toggle-terminal' };
 
 /** Longest board id accepted from the parent (real ids are short; this only stops absurd input). */
 export const MAX_EMBED_BOARD_ID_LENGTH = 200;
@@ -64,6 +67,8 @@ export function parseInbound(event: { origin: string; data: unknown }, allowedOr
       return typeof m.open === 'boolean' ? { kind: 'set-sidebar', open: m.open } : null;
     case 'chalk:toggle-sidebar':
       return { kind: 'toggle-sidebar' };
+    case 'chalk:library-changed':
+      return { kind: 'library-changed' };
     case 'chalk:open-board':
       return typeof m.id === 'string' && m.id.length > 0 && m.id.length <= MAX_EMBED_BOARD_ID_LENGTH ? { kind: 'open-board', id: m.id } : null;
     default:
@@ -90,4 +95,9 @@ export function originOf(url: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** Ctrl+` (the Atlas terminal toggle, D24): Ctrl or Cmd, no Alt, ignoring key repeat. */
+export function isTerminalToggleKey(e: { code?: string; ctrlKey: boolean; metaKey?: boolean; altKey?: boolean; repeat?: boolean }): boolean {
+  return e.code === 'Backquote' && (e.ctrlKey || Boolean(e.metaKey)) && !e.altKey && !e.repeat;
 }

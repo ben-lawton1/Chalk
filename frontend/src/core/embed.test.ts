@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanOrigins, isEmbedded, originOf, parseBoardParam, parseEmbedFlag, parseInbound, targetOrigins } from './embed';
+import { cleanOrigins, isEmbedded, isTerminalToggleKey, originOf, parseBoardParam, parseEmbedFlag, parseInbound, targetOrigins } from './embed';
 
 const ORIGINS = ['http://localhost:8090', 'http://127.0.0.1:8090'];
 const ok = (data: unknown, origin = 'http://localhost:8090') => parseInbound({ origin, data }, ORIGINS);
@@ -32,6 +32,12 @@ describe('parseInbound', () => {
     expect(ok({ source: 'atlas', type: 'chalk:set-sidebar', open: true })).toEqual({ kind: 'set-sidebar', open: true });
     expect(ok({ source: 'atlas', type: 'chalk:toggle-sidebar' }, 'http://127.0.0.1:8090')).toEqual({ kind: 'toggle-sidebar' });
     expect(ok({ source: 'atlas', type: 'chalk:open-board', id: 'p1' })).toEqual({ kind: 'open-board', id: 'p1' });
+  });
+  it('accepts library-changed (D24) with the same validation', () => {
+    expect(ok({ source: 'atlas', type: 'chalk:library-changed' })).toEqual({ kind: 'library-changed' });
+    expect(ok({ source: 'atlas', type: 'chalk:library-changed' }, 'http://evil.example')).toBeNull();
+    expect(ok({ source: 'chalk', type: 'chalk:library-changed' })).toBeNull();
+    expect(ok({ type: 'chalk:library-changed' })).toBeNull();
   });
   it('ignores a wrong origin', () => {
     expect(ok({ source: 'atlas', type: 'chalk:toggle-sidebar' }, 'http://evil.example')).toBeNull();
@@ -67,5 +73,16 @@ describe('origins', () => {
     expect(originOf('http://localhost:8090/some/path?x=1')).toBe('http://localhost:8090');
     expect(originOf('')).toBeNull();
     expect(originOf('nonsense')).toBeNull();
+  });
+});
+
+describe('isTerminalToggleKey', () => {
+  it('matches Ctrl+backquote only', () => {
+    expect(isTerminalToggleKey({ code: 'Backquote', ctrlKey: true })).toBe(true);
+    expect(isTerminalToggleKey({ code: 'Backquote', ctrlKey: false, metaKey: true })).toBe(true);
+    expect(isTerminalToggleKey({ code: 'Backquote', ctrlKey: false })).toBe(false);
+    expect(isTerminalToggleKey({ code: 'Backquote', ctrlKey: true, altKey: true })).toBe(false);
+    expect(isTerminalToggleKey({ code: 'Backquote', ctrlKey: true, repeat: true })).toBe(false);
+    expect(isTerminalToggleKey({ code: 'KeyA', ctrlKey: true })).toBe(false);
   });
 });

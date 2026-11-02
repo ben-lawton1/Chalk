@@ -6,7 +6,7 @@ import { api } from './api';
 import { markClean, resetAutosaveForTests } from './autosave';
 import {
   SIDEBAR_STORAGE_KEY, addNotebook, addPage, addSection, deleteNotebook, deletePage, deleteSection, initSidebarPrefs,
-  readSidebarPrefs, refreshLibrary, renameNotebook, renamePage, renameSection, startLibrarySync, writeSidebarPrefs,
+  onLibraryChanged, readSidebarPrefs, refreshLibrary, reloadAfterExternalChange, renameNotebook, renamePage, renameSection, startLibrarySync, writeSidebarPrefs,
 } from './library';
 
 vi.mock('./api', async (orig) => ({
@@ -263,5 +263,41 @@ describe('sidebar preferences', () => {
     stubStorage({ [SIDEBAR_STORAGE_KEY]: JSON.stringify({ open: false, expanded: [] }) });
     initSidebarPrefs();
     expect(getState().sidebarOpen).toBe(false);
+  });
+});
+
+describe('library change events (D24)', () => {
+  it('own deletes, renames and creates are announced; plain refreshes are not', async () => {
+    const seen = vi.fn();
+    const off = onLibraryChanged(seen);
+    await refreshLibrary();
+    expect(seen).not.toHaveBeenCalled();
+    vi.mocked(api.deleteBoard).mockResolvedValue(undefined);
+    await deletePage('p9');
+    vi.mocked(api.renameNotebook).mockResolvedValue({ name: 'Job' });
+    await renameNotebook('Work', 'Job');
+    expect(seen).toHaveBeenCalledTimes(2);
+    off();
+    await deletePage('p9');
+    expect(seen).toHaveBeenCalledTimes(2);
+  });
+
+  it('reloadAfterExternalChange refreshes the tree and keeps a page that still exists', async () => {
+    const seen = vi.fn();
+    onLibraryChanged(seen);
+    vi.mocked(api.getLibrary).mockResolvedValue(tree(page('p1', 'Roadmap'), page('p2', 'New from Atlas')));
+    await reloadAfterExternalChange();
+    expect(getState().library?.notebooks[0]!.sections[0]!.pages).toHaveLength(2);
+    expect(getState().board?.id).toBe('p1');
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('reloadAfterExternalChange falls back when the open page was deleted', async () => {
+    vi.mocked(api.getLibrary).mockResolvedValue(tree(page('q1', 'Left over')));
+    vi.mocked(api.listBoards).mockResolvedValue([page('q1', 'Left over')]);
+    vi.mocked(api.getBoard).mockResolvedValue(full(page('q1', 'Left over')));
+    await reloadAfterExternalChange();
+    expect(getState().board?.id).toBe('q1');
+    expect(getState().toast?.message).toBe('Page not found');
   });
 });

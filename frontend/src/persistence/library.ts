@@ -2,7 +2,7 @@
 // Folder names are sent exactly as the tree returns them; the server may change a new name (suffix, "-"), so callers adopt what comes back.
 import { MAX_BOARD_NAME_LENGTH } from '../constants';
 import { parseEmbedFlag } from '../core/embed';
-import { getState, setState, subscribe } from '../state/store';
+import { getState, notify, setState, subscribe } from '../state/store';
 import type { BoardMeta, LibraryTree } from '../types';
 import { api } from './api';
 import { isDirty, markClean } from './autosave';
@@ -106,6 +106,42 @@ function refreshQuietly(): void {
   refreshLibrary().catch(() => undefined);
 }
 
+// Chalk's own library changes (sidebar create/rename/delete) are announced here; embed mode forwards them to Atlas (D24).
+const changeListeners = new Set<() => void>();
+
+/** Listens for library changes made from inside Chalk. Not called for plain refreshes or for changes reported by Atlas. */
+export function onLibraryChanged(cb: () => void): () => void {
+  changeListeners.add(cb);
+  return () => {
+    changeListeners.delete(cb);
+  };
+}
+
+function emitLibraryChanged(): void {
+  for (const cb of [...changeListeners]) {
+    try {
+      cb();
+    } catch {
+      /* a listener must never break an operation */
+    }
+  }
+}
+
+/**
+ * Atlas changed the library behind Chalk's back: reload the tree. If the open page is gone, behave like an unknown board:
+ * toast "Page not found", then open the most recent page or start a new one.
+ */
+export async function reloadAfterExternalChange(): Promise<void> {
+  await refreshLibrary();
+  const b = getState().board;
+  const lib = getState().library;
+  if (!b || !lib) return;
+  if (lib.notebooks.some((n) => n.sections.some((x) => x.pages.some((p) => p.id === b.id)))) return;
+  notify('Page not found');
+  await openFirstOrCreate();
+  await refreshLibrary();
+}
+
 /** Keeps the tree fresh: when the open page changes, after a save changed its name, and when the window regains focus. */
 export function startLibrarySync(): () => void {
   const unsubscribe = subscribe((s, prev) => {
@@ -116,7 +152,8 @@ export function startLibrarySync(): () => void {
     }
     if (s.saveStatus === 'saved' && prev.saveStatus !== 'saved' && s.library) {
       const entry = s.library.notebooks.flatMap((n) => n.sections.flatMap((x) => x.pages)).find((p) => p.id === s.board!.id);
-      if (!entry || entry.name !== s.board.name) refreshQuietly();
+      if (!entry) refreshQuietly();
+      else if (entry.name !== s.board.name) refreshLibrary().then(emitLibraryChanged, () => undefined); // rename of the open page
     }
   });
   const onFocus = (): void => refreshQuietly();
@@ -145,26 +182,32 @@ export async function addPage(notebook: string, section: string): Promise<NewPla
   const b = getState().board;
   await refreshLibrary();
   if (!b || b.id === before) return null;
+  emitLibraryChanged();
   return { notebook: b.notebook, section: b.section, id: b.id };
 }
 
 /** New section in a notebook with one page, opened. */
 export async function addSection(notebook: string): Promise<NewPlace | null> {
   const sec = await api.createSection(notebook, NEW_SECTION_NAME);
-  return addPage(notebook, sec.name);
+  const place = await addPage(notebook, sec.name);
+  if (!place) emitLibraryChanged();
+  return place;
 }
 
 /** New notebook with one section and one page, opened. */
 export async function addNotebook(): Promise<NewPlace | null> {
   const nb = await api.createNotebook(NEW_NOTEBOOK_NAME);
   const sec = await api.createSection(nb.name, FIRST_SECTION_NAME);
-  return addPage(nb.name, sec.name);
+  const place = await addPage(nb.name, sec.name);
+  if (!place) emitLibraryChanged();
+  return place;
 }
 
 /** Resolves to the final notebook name. */
 export async function renameNotebook(notebook: string, name: string): Promise<string> {
   const r = await api.renameNotebook(notebook, name);
   await refreshLibrary();
+  emitLibraryChanged();
   return r.name;
 }
 
@@ -172,6 +215,7 @@ export async function renameNotebook(notebook: string, name: string): Promise<st
 export async function renameSection(notebook: string, section: string, name: string): Promise<string> {
   const r = await api.renameSection(notebook, section, name);
   await refreshLibrary();
+  emitLibraryChanged();
   return r.name;
 }
 
@@ -183,11 +227,13 @@ export async function renamePage(id: string, name: string): Promise<void> {
   }
   await api.updateBoard(id, { name });
   await refreshLibrary();
+  emitLibraryChanged();
 }
 
 export async function deletePage(id: string): Promise<void> {
   await deleteBoard(id);
   await refreshLibrary();
+  emitLibraryChanged();
 }
 
 export async function deleteSection(notebook: string, section: string): Promise<void> {
@@ -196,6 +242,7 @@ export async function deleteSection(notebook: string, section: string): Promise<
   await api.deleteSection(notebook, section);
   if (hit) await openFirstOrCreate();
   await refreshLibrary();
+  emitLibraryChanged();
 }
 
 export async function deleteNotebook(notebook: string): Promise<void> {
@@ -204,6 +251,7 @@ export async function deleteNotebook(notebook: string): Promise<void> {
   await api.deleteNotebook(notebook);
   if (hit) await openFirstOrCreate();
   await refreshLibrary();
+  emitLibraryChanged();
 }
 
 /**
@@ -216,5 +264,6 @@ export async function createPageQuietly(name?: string): Promise<{ id: string; na
   const clean = name?.trim().slice(0, MAX_BOARD_NAME_LENGTH);
   const board = await api.createBoard({ ...(clean ? { name: clean } : {}), ...(where ?? {}) });
   await refreshLibrary().catch(() => undefined);
+  emitLibraryChanged();
   return { id: board.id, name: board.name };
 }
