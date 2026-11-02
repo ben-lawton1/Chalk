@@ -1,6 +1,7 @@
 // Notebook library client: tree refresh, notebook/section/page operations for the sidebar, and the sidebar preferences.
 // Folder names are sent exactly as the tree returns them; the server may change a new name (suffix, "-"), so callers adopt what comes back.
 import { MAX_BOARD_NAME_LENGTH } from '../constants';
+import { parseEmbedFlag } from '../core/embed';
 import { getState, setState, subscribe } from '../state/store';
 import type { BoardMeta, LibraryTree } from '../types';
 import { api } from './api';
@@ -40,7 +41,18 @@ export function readSidebarPrefs(): SidebarPrefs {
   return { open: true, expanded: [] };
 }
 
+/** True when started with ?embed=1 (the sidebar starts closed). */
+function embedMode(): boolean {
+  try {
+    return typeof window !== 'undefined' && parseEmbedFlag(window.location.search);
+  } catch {
+    return false;
+  }
+}
+
 export function writeSidebarPrefs(prefs: SidebarPrefs): void {
+  // An embedded Chalk starts closed on purpose; that must not become the remembered state of standalone Chalk.
+  if (embedMode()) prefs = { ...prefs, open: readSidebarPrefs().open };
   try {
     if (typeof window !== 'undefined') window.localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(prefs));
   } catch {
@@ -50,7 +62,7 @@ export function writeSidebarPrefs(prefs: SidebarPrefs): void {
 
 /** Applies the remembered open/closed state before the first render (no flash). */
 export function initSidebarPrefs(): void {
-  setState({ sidebarOpen: readSidebarPrefs().open });
+  setState({ sidebarOpen: embedMode() ? false : readSidebarPrefs().open });
 }
 
 // ---------------------------------------------------------------------------

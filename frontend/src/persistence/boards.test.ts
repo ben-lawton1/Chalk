@@ -108,15 +108,25 @@ describe('initBoards', () => {
     expect(w.replaceState).toHaveBeenCalledWith(null, '', '?board=abc123');
   });
 
-  it('a missing ?board= creates a new board and says so', async () => {
+  it('a missing ?board= falls back to the normal start and says so', async () => {
     const w = stubWindow('?board=gone123');
-    vi.mocked(api.getBoard).mockRejectedValue(new ApiError(404, { detail: 'Board not found' }));
-    vi.mocked(api.createBoard).mockResolvedValue(board('fresh1', { version: 1 }));
+    vi.mocked(api.listBoards).mockResolvedValue([sum('first1')]);
+    vi.mocked(api.getBoard).mockImplementation(async (id: string) => {
+      if (id === 'gone123') throw new ApiError(404, { detail: 'Board not found' });
+      return board(id);
+    });
     await initBoards();
-    expect(getState().toast?.message).toBe('Board not found — created a new one');
-    expect(api.createBoard).toHaveBeenCalledWith({});
-    expect(getState().board?.id).toBe('fresh1');
-    expect(w.replaceState).toHaveBeenLastCalledWith(null, '', '?board=fresh1');
+    expect(getState().toast?.message).toBe('Page not found');
+    expect(api.createBoard).not.toHaveBeenCalled();
+    expect(getState().board?.id).toBe('first1');
+    expect(w.replaceState).toHaveBeenLastCalledWith(null, '', '?board=first1');
+  });
+
+  it('replaceUrl keeps embed=1 and other params', async () => {
+    const w = stubWindow('?board=abc123&embed=1');
+    vi.mocked(api.getBoard).mockResolvedValue(board('abc123'));
+    await initBoards();
+    expect(w.replaceState).toHaveBeenCalledWith(null, '', '?board=abc123&embed=1');
   });
 
   it('retries a network failure, then gives up with an error toast', async () => {

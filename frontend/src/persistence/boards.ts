@@ -10,6 +10,7 @@ import {
   VIEWPORT_SAVE_DEBOUNCE_MS,
   VIEWPORT_STORAGE_PREFIX,
 } from '../constants';
+import { parseBoardParam } from '../core/embed';
 import { parseSceneFile, parseSceneNotes } from '../core/serialize';
 import { clearHistory } from '../state/history';
 import { getState, notify, setInteraction, setState, setViewport, subscribe } from '../state/store';
@@ -27,7 +28,7 @@ type Timer = ReturnType<typeof setTimeout>;
 function getBoardParam(): string | null {
   try {
     if (typeof window === 'undefined') return null;
-    return new URLSearchParams(window.location.search).get('board') || null;
+    return parseBoardParam(window.location.search);
   } catch {
     return null;
   }
@@ -36,7 +37,9 @@ function getBoardParam(): string | null {
 function replaceUrl(id: string): void {
   try {
     if (typeof window === 'undefined') return;
-    window.history.replaceState(null, '', '?board=' + encodeURIComponent(id));
+    const q = new URLSearchParams(window.location.search);
+    q.set('board', id); // other params (embed=1) stay, so a reload keeps the mode
+    window.history.replaceState(null, '', '?' + q.toString());
   } catch {
     /* ignore */
   }
@@ -114,9 +117,7 @@ async function initOnce(): Promise<void> {
       return;
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 404)) throw e;
-      notify('Board not found — created a new one');
-      await createBoard();
-      return;
+      notify('Page not found');
     }
   }
   const list = await listBoards();

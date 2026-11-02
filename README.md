@@ -132,6 +132,15 @@ Every page has a second, typed layer beside the drawing: the **notes column**. I
 
 **Links to pages.** Type `@` or `[[` (or pick Link to page) to search every page in your library; pages in the current section come first, then the current notebook. The last row, `+ New page "<what you typed>"`, creates the page in this section without opening it and links it (`/newpage` does the same with an untitled page). A link is a chip showing the page's current name, so renames follow; a link to a deleted page is struck through. Click a chip to open the page, in notes mode or out of it. `/url` and `Ctrl+K` link a web address (an empty address removes the link).
 
+## Embed mode (Atlas)
+
+Chalk can live inside another page (Atlas, the front end that frames it). Two URL parameters, both optional:
+
+- `?board=<id>` opens that page on start (standalone too). An unknown id shows the toast "Page not found" and starts normally.
+- `?embed=1` starts with the notebook sidebar closed. The sidebar button still opens it, and the open/closed choice made in an embed is not remembered for standalone Chalk.
+
+Inside an iframe with `embed=1`, Chalk also listens for `postMessage` commands from the parent and reports its state back; the contract is in [docs/HACKING.md](docs/HACKING.md#embed-mode-atlas). Only the origins in `CHALK_EMBED_ORIGINS` (comma-separated, default `http://localhost:8090,http://127.0.0.1:8090`) can talk to it. The server sends `Content-Security-Policy: frame-ancestors 'self' <those origins>`, so no other site can frame Chalk (it has a terminal). Set the variable in `.env` (see `.env.example`) when Atlas runs on another address.
+
 ## Terminal
 
 Chalk can show a real terminal (PowerShell, WSL, or anything you configure, such as `ssh`) in a panel at the bottom of the window. A browser page and a Docker container can't start processes on your PC, so a small helper program, the **terminal bridge** (`chalk-terminal`, written in Go, source in `bridge/`), runs on Windows and connects the panel to a pseudo-terminal. The first part of this section describes the panel in Chalk; the rest is about the bridge.

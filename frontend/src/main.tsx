@@ -13,6 +13,7 @@ import { initBoards } from './persistence/boards';
 import { initSidebarPrefs, startLibrarySync } from './persistence/library';
 import { startPenPrefs } from './persistence/penPrefs';
 import { App } from './ui/App';
+import { startEmbedBridge } from './ui/embed/bridge';
 
 function attempt(name: string, fn: () => unknown): void {
   try {
@@ -43,6 +44,7 @@ async function boot(): Promise<void> {
   attempt('attachClipboard', attachClipboard);
   attempt('startAutosave', startAutosave);
   attempt('startLibrarySync', startLibrarySync);
+  attempt('startEmbedBridge', startEmbedBridge);
   attempt('initBoards', initBoards);
 }
 

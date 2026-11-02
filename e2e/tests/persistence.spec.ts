@@ -270,11 +270,10 @@ test('PER-8: offline: the local backup is restored after reload', async ({ page,
     .toBeNull();
 });
 
-test('PER-9: an unknown board id creates a new board', async ({ page }) => {
+test('PER-9: an unknown board id shows a toast and starts normally', async ({ page }) => {
   await page.goto('/?board=missing00000');
-  await expect(page.getByTestId(TID.toast)).toHaveText('Board not found — created a new one');
+  await expect(page.getByTestId(TID.toast)).toHaveText('Page not found');
   await expect.poll(() => boardParam(page)).not.toBe('missing00000');
   await waitReady(page);
-  expect(await els(page)).toEqual([]);
 });
 

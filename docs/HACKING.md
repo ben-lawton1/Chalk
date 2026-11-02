@@ -96,6 +96,18 @@ The terminal is a dock panel (`ui/terminal/`) talking to the host bridge (`bridg
 - The bridge URL comes from `GET /api/config` (`terminalUrl`, env `CHALK_TERMINAL_URL`). The e2e suite points it at the `term-test` service, whose only profile is the Linux `shell`.
 
 
+### Embed mode (Atlas)
+
+Contract D13 between Chalk and Atlas (the Atlas repo codes to the same text; change both together).
+
+- **URL:** `/?board=<id>&embed=1`. `board` also works standalone (`persistence/boards.ts` `initOnce`: unknown id gives the toast "Page not found", then the normal start: most recent page, or a new one). `embed=1` makes `initSidebarPrefs` start with `sidebarOpen = false`; `writeSidebarPrefs` keeps the stored `open` untouched while embedded, so an embed never changes standalone's remembered state. `replaceUrl` keeps other query params, so a reload stays embedded.
+- **Code:** `core/embed.ts` is pure (query parsing, `parseInbound`, `cleanOrigins`, `targetOrigins`; tested in `core/embed.test.ts`). `ui/embed/bridge.ts` is the only side-effecting part, started from `main.tsx`; it does nothing unless `window.parent !== window` and `embed=1`.
+- **Atlas to Chalk** (`{source:'atlas', ...}`): `chalk:set-sidebar {open:boolean}`, `chalk:toggle-sidebar`, `chalk:open-board {id:string}` (goes through `openBoard`, so the current page is flushed first; unknown id shows "Page not found"). A message is ignored unless `event.origin` is in the allow-list, `event.source` is the parent window, `data.source === 'atlas'` and the fields are well formed.
+- **Chalk to Atlas** (`{source:'chalk', ...}`): `chalk:ready` once a page is open, `chalk:sidebar {open}` on every sidebar change (also once right after ready), `chalk:board {id, name}` whenever the open page id or name changes.
+- **Origins:** the allow-list is `embedOrigins` from `GET /api/config` (env `CHALK_EMBED_ORIGINS`, comma-separated, default `http://localhost:8090,http://127.0.0.1:8090`; wildcards and malformed entries are dropped; if the config cannot be read the bridge stays silent). Outgoing messages go to a single `targetOrigin`: the parent's origin from `location.ancestorOrigins[0]` (Chromium) or `document.referrer`, else the origin of the first valid inbound message, and only if it is in the allow-list; until one is known they are sent to each allowed origin (the browser delivers only to the one that matches the parent, so nothing reaches another site). Never `'*'`.
+- **Backend:** every response carries `Content-Security-Policy: frame-ancestors 'self' <origins>` (middleware in `main.py`).
+- **Testing:** vitest (`core/embed.test.ts`, `persistence/boards.test.ts`), pytest (`test_health.py`, `test_static.py`) and `e2e/tests/embed.spec.ts`. The e2e serves a fake host page at `http://embed-host.test:9000` with `page.route` and frames `app-test`; `compose.test.yaml` sets `CHALK_EMBED_ORIGINS` on `app-test` to that origin, and the spec turns off Chrome's Local Network Access check (a "public" page framing a private address is otherwise blocked). To try it by hand, frame Chalk from any page on an allowed origin and `postMessage({source:'atlas', type:'chalk:toggle-sidebar'}, chalkOrigin)`.
+
 ### Coding rules worth knowing
 
 - **Elements are immutable.** Never mutate an element, a state array or `DEFAULT_STYLE`; spread into a new object. Many functions return the input array (`===`) when nothing changed, and autosave and the render caches rely on that. Keep it that way.
