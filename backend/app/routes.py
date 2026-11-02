@@ -26,6 +26,21 @@ from app.models import (
 )
 
 DEFAULT_TERMINAL_URL = "http://127.0.0.1:7681"
+DEFAULT_EMBED_ORIGINS = "http://localhost:8090,http://127.0.0.1:8090"
+
+
+def embed_origins() -> list[str]:
+    """Origins allowed to frame Chalk and message it (env CHALK_EMBED_ORIGINS, comma-separated)."""
+    raw = os.environ.get("CHALK_EMBED_ORIGINS")
+    if raw is None or not raw.strip():
+        raw = DEFAULT_EMBED_ORIGINS
+    out: list[str] = []
+    for item in raw.split(","):
+        o = item.strip().rstrip("/")
+        # no wildcards, and nothing that could break out of the CSP header value
+        if o and o != "*" and not any(c in o for c in " ;'\"\r\n") and o not in out:
+            out.append(o)
+    return out
 
 router = APIRouter(prefix="/api")
 
@@ -68,7 +83,7 @@ def health() -> Health:
 
 @router.get("/config", response_model=AppConfig)
 def get_config() -> AppConfig:
-    return AppConfig(terminalUrl=os.environ.get("CHALK_TERMINAL_URL") or DEFAULT_TERMINAL_URL)
+    return AppConfig(terminalUrl=os.environ.get("CHALK_TERMINAL_URL") or DEFAULT_TERMINAL_URL, embedOrigins=embed_origins())
 
 
 @router.get("/library", response_model=LibraryTree)

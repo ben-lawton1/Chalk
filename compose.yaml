@@ -8,6 +8,7 @@ services:
     ports:
       - "8080:8000"
     environment:
+      CHALK_EMBED_ORIGINS: ${CHALK_EMBED_ORIGINS:-http://localhost:8090,http://127.0.0.1:8090}
       CHALK_LIBRARY_LABEL: ${CHALK_LIBRARY:-${USERPROFILE}/Documents/Chalk}
     volumes:
       - ${CHALK_LIBRARY:-${USERPROFILE}/Documents/Chalk}:/library

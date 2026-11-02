@@ -80,3 +80,14 @@ def test_no_mount_when_dir_has_no_files(tmp_path):
     app = create_app(library_dir=str(tmp_path / "lib"), db_path="", static_dir=str(empty))
     assert not any(getattr(r, "name", None) == "spa" for r in app.routes)
     assert TestClient(app).get("/").status_code == 404
+
+
+def test_index_has_frame_ancestors_csp(spa, monkeypatch):
+    monkeypatch.delenv("CHALK_EMBED_ORIGINS", raising=False)
+    csp = spa.get("/").headers["content-security-policy"]
+    assert csp == "frame-ancestors 'self' http://localhost:8090 http://127.0.0.1:8090"
+
+
+def test_csp_follows_env(spa, monkeypatch):
+    monkeypatch.setenv("CHALK_EMBED_ORIGINS", "https://atlas.example")
+    assert spa.get("/").headers["content-security-policy"] == "frame-ancestors 'self' https://atlas.example"

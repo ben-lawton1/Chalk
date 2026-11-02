@@ -63,6 +63,7 @@ class Health(BaseModel):
 
 class AppConfig(BaseModel):
     terminalUrl: str
+    embedOrigins: list[str]
 
 
 class BoardSummary(BaseModel):

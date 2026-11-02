@@ -16,6 +16,7 @@ services:
       CHALK_LIBRARY_DIR: /tmp/chalk-e2e-library
       CHALK_DB_PATH: ""
       CHALK_TERMINAL_URL: http://term-test:7681
+      CHALK_EMBED_ORIGINS: http://embed-host.test:9000
     healthcheck: *health
   term-test:                        # the host bridge (Linux build) for the terminal e2e; private network only
     image: chalk-term-test:${CHALK_TEST_TAG:-local}

@@ -14,13 +14,23 @@ def test_health(tmp_path) -> None:
 
 def test_config_default(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("CHALK_TERMINAL_URL", raising=False)
+    monkeypatch.delenv("CHALK_EMBED_ORIGINS", raising=False)
     client = TestClient(create_app(db_path=str(tmp_path / "t.db"), static_dir=""))
     response = client.get("/api/config")
     assert response.status_code == 200
-    assert response.json() == {"terminalUrl": "http://127.0.0.1:7681"}
+    assert response.json() == {
+        "terminalUrl": "http://127.0.0.1:7681",
+        "embedOrigins": ["http://localhost:8090", "http://127.0.0.1:8090"],
+    }
 
 
 def test_config_terminal_url_from_env(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CHALK_TERMINAL_URL", "http://term-test:7681")
     client = TestClient(create_app(db_path=str(tmp_path / "t.db"), static_dir=""))
-    assert client.get("/api/config").json() == {"terminalUrl": "http://term-test:7681"}
+    assert client.get("/api/config").json()["terminalUrl"] == "http://term-test:7681"
+
+
+def test_config_embed_origins_from_env(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CHALK_EMBED_ORIGINS", " https://atlas.example/ , http://a:1,*,bad;origin,http://a:1")
+    client = TestClient(create_app(db_path=str(tmp_path / "t.db"), static_dir=""))
+    assert client.get("/api/config").json()["embedOrigins"] == ["https://atlas.example", "http://a:1"]
